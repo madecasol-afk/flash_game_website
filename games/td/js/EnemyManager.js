@@ -69,7 +69,7 @@ class EnemyManager {
      * 
      * @param {string} type - Key into GAME_CONFIG.enemies (e.g., 'basic')
      */
-    spawnEnemy(type) {
+    spawnEnemy(type, waveNumber = 1) {
         const def = GAME_CONFIG.enemies[type];
         if (!def) {
             console.warn(`EnemyManager: unknown enemy type "${type}"`);
@@ -80,6 +80,12 @@ class EnemyManager {
             console.warn('EnemyManager: no valid path — cannot spawn');
             return;
         }
+
+        // Compounding health scaling: +5.5% health per wave
+        // WHY? As waves progress, the player builds more towers and purchases upgrades.
+        // Scaling enemy HP exponentially ensures the game remains challenging.
+        const hpMultiplier = Math.pow(1.055, waveNumber - 1);
+        const scaledHealth = Math.round(def.health * hpMultiplier);
 
         /* Start at the spawn tile's pixel centre */
         const startTile = this.currentPath[0];
@@ -109,8 +115,8 @@ class EnemyManager {
         const enemy = {
             active: true,
             type,
-            health: def.health,
-            maxHealth: def.health,
+            health: scaledHealth,
+            maxHealth: scaledHealth,
             speed: def.speed,
             reward: def.reward,
             x: startPos.x,
