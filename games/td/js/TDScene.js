@@ -97,10 +97,10 @@ class TDScene extends Phaser.Scene {
                 const b = data[idx * 4 + 2];
                 // Checkerboards are grey/white. Due to JPEG compression and shadows,
                 // edge pixels might be darker (e.g. R=158) or have chromatic noise.
-                // We check if the pixel is relatively colorless (a shade of grey)
-                // by ensuring channels are within 25 values, but prevent dark blacks (r<100) to protect outlines.
-                return (r > 100 && g > 100 && b > 100) &&
-                       (Math.abs(r - g) < 25 && Math.abs(r - b) < 25 && Math.abs(g - b) < 25);
+                // We check if the pixel is relatively colorless (a shade of grey).
+                // Lower threshold to 30 to catch dark grey checkerboards, but protect pure black outlines.
+                return (r > 30 && g > 30 && b > 30) &&
+                       (Math.abs(r - g) < 35 && Math.abs(r - b) < 35 && Math.abs(g - b) < 35);
             };
 
             const pushEdge = (idx) => {
@@ -160,6 +160,23 @@ class TDScene extends Phaser.Scene {
                         visited[n] = 1;
                         if (isBg(n)) { data[n * 4 + 3] = 0; queue[tail++] = n; }
                     }
+                }
+                // Diagonals for checkerboard connectivity
+                if (x > 0 && y > 0) { // Top-Left
+                    const n = idx - width - 1;
+                    if (!visited[n]) { visited[n] = 1; if (isBg(n)) { data[n * 4 + 3] = 0; queue[tail++] = n; } }
+                }
+                if (x < width - 1 && y > 0) { // Top-Right
+                    const n = idx - width + 1;
+                    if (!visited[n]) { visited[n] = 1; if (isBg(n)) { data[n * 4 + 3] = 0; queue[tail++] = n; } }
+                }
+                if (x > 0 && y < height - 1) { // Bottom-Left
+                    const n = idx + width - 1;
+                    if (!visited[n]) { visited[n] = 1; if (isBg(n)) { data[n * 4 + 3] = 0; queue[tail++] = n; } }
+                }
+                if (x < width - 1 && y < height - 1) { // Bottom-Right
+                    const n = idx + width + 1;
+                    if (!visited[n]) { visited[n] = 1; if (isBg(n)) { data[n * 4 + 3] = 0; queue[tail++] = n; } }
                 }
             }
 
