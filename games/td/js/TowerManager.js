@@ -105,12 +105,25 @@ class TowerManager {
         sprite.setScale(scale);
         container.add(sprite);
 
-        // Add a graphics object for upgrade dots
+        // Add a graphics object for upgrade dots/auras
         const overlayGfx = this.scene.add.graphics();
         container.add(overlayGfx);
         
+        // Add a crisp text badge for level display in the bottom right corner
+        const levelText = this.scene.add.text(tileSize / 2 - 2, tileSize / 2 - 2, '', {
+            fontSize: '10px',
+            fontFamily: 'Arial, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 3
+        });
+        levelText.setOrigin(1, 1); // Anchor to bottom-right
+        container.add(levelText);
+        
         // Save reference for easy access in redrawTower
         container.overlayGfx = overlayGfx;
+        container.levelText = levelText;
 
         /* Store the tower data */
         const tower = {
@@ -815,21 +828,22 @@ class TowerManager {
 
         const maxLevel = Math.max(tower.damageLevel, tower.speedLevel, tower.rangeLevel);
         
-        // Draw a visual indicator for high level towers
+        // Update the crisp text badge!
         if (maxLevel > 0) {
-            gfx.fillStyle(0xffd700, 1);
+            tower.graphics.levelText.setText(`Lv${maxLevel}`);
             
-            if (maxLevel < 5) {
-                // Draw dots for early levels
-                for (let i = 0; i < maxLevel; i++) {
-                    gfx.fillCircle(-10 + (i * 10), -12, 3);
-                }
+            // Color code the text based on power tiers
+            if (maxLevel >= 20) {
+                tower.graphics.levelText.setColor('#e056fd'); // Mythic Purple
+            } else if (maxLevel >= 10) {
+                tower.graphics.levelText.setColor('#f9ca24'); // Legendary Gold
+            } else if (maxLevel >= 5) {
+                tower.graphics.levelText.setColor('#badc58'); // Rare Green
             } else {
-                // Draw a golden star for highly upgraded towers (simplified as a larger circle with outline)
-                gfx.lineStyle(2, 0xffffff, 1);
-                gfx.fillCircle(0, -12, 6);
-                gfx.strokeCircle(0, -12, 6);
+                tower.graphics.levelText.setColor('#ffffff'); // Common White
             }
+        } else {
+            tower.graphics.levelText.setText(''); // Hide if level 0
         }
     }
 }
