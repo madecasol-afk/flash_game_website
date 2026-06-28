@@ -31,8 +31,13 @@ class TDScene extends Phaser.Scene {
        This method is here as a placeholder for future sprite sheets.
        ------------------------------------------------------------------ */
     preload() {
-        // Future: this.load.image('tileset', 'assets/tileset.png');
-        // Future: this.load.audio('place', 'assets/place.mp3');
+        // Load raw AI-generated enemy JPEGs
+        // WHY JPEGs? AI-generated images are in JPEG format. We will convert them to transparent sprites
+        // programmatically inside create() to avoid needing external image editing software.
+        this.load.image('scout_raw', 'assets/images/scout.jpg');
+        this.load.image('runner_raw', 'assets/images/runner.jpg');
+        this.load.image('tank_raw', 'assets/images/tank.jpg');
+        this.load.image('boss_raw', 'assets/images/boss.jpg');
     }
 
     /* ------------------------------------------------------------------
@@ -45,6 +50,68 @@ class TDScene extends Phaser.Scene {
         this.gold  = cfg.player.startGold;
         this.lives = cfg.player.startLives;
         this.gameOver = false;
+
+        /* --- Process Textures (Chroma Key Background Removal) ---
+           WHY? The JPEGs have an off-white background (R=240, G=240, B=240). By drawing them
+           onto an offscreen canvas texture, scanning pixels, and setting alpha to 0 for light pixels,
+           we achieve clean transparent sprite sheets natively in browser. */
+        const processTexture = (key, rawKey) => {
+            const rawImg = this.textures.get(rawKey).getSourceImage();
+            const canvasTexture = this.textures.createCanvas(key, 1024, 1024);
+            canvasTexture.draw(0, 0, rawImg);
+            
+            const context = canvasTexture.context;
+            const imgData = context.getImageData(0, 0, 1024, 1024);
+            const data = imgData.data;
+
+            // Loop through all pixel data (each pixel takes 4 bytes: Red, Green, Blue, Alpha)
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i+1];
+                const b = data[i+2];
+
+                // If pixel is close to off-white/light grey (R,G,B all > 220)
+                if (r > 220 && g > 220 && b > 220) {
+                    data[i+3] = 0; // Set alpha to 0 (fully transparent)
+                }
+            }
+            context.putImageData(imgData, 0, 0);
+            canvasTexture.refresh();
+
+            // Slice into a 2x2 grid of 512x512 frames
+            // SYNTAX BREAKDOWN:
+            // - `canvasTexture.add('frame_name', sourceIndex, x, y, width, height)`
+            // - Defines custom frames inside our newly processed texture sheet.
+            canvasTexture.add('frame_0', 0, 0, 0, 512, 512);
+            canvasTexture.add('frame_1', 0, 512, 0, 512, 512);
+            canvasTexture.add('frame_2', 0, 0, 512, 512, 512);
+            canvasTexture.add('frame_3', 0, 512, 512, 512, 512);
+        };
+
+        processTexture('basic_clean', 'scout_raw');
+        processTexture('fast_clean', 'runner_raw');
+        processTexture('armored_clean', 'tank_raw');
+        processTexture('boss_clean', 'boss_raw');
+
+        // Create walking animations for all 4 monster types
+        const createWalkAnim = (key, textureKey) => {
+            this.anims.create({
+                key: key,
+                frames: [
+                    { key: textureKey, frame: 'frame_0' },
+                    { key: textureKey, frame: 'frame_1' },
+                    { key: textureKey, frame: 'frame_2' },
+                    { key: textureKey, frame: 'frame_3' }
+                ],
+                frameRate: 6,
+                repeat: -1
+            });
+        };
+
+        createWalkAnim('basic_walk', 'basic_clean');
+        createWalkAnim('fast_walk', 'fast_clean');
+        createWalkAnim('armored_walk', 'armored_clean');
+        createWalkAnim('boss_walk', 'boss_clean');
 
         /* --- Initialise the Grid ---
            The grid converts the 2D map layout into a data structure

@@ -87,14 +87,18 @@ class EnemyManager {
 
         const tileSize = this.gridSystem.tileSize;
 
-        /* Draw the enemy as a colored circle.
-           WHY circles instead of sprites? Same as towers — fast to implement
-           for the MVP. The color-per-type system mirrors Bloons TD where
-           balloon color instantly communicates enemy difficulty. */
-        const gfx = this.scene.add.graphics();
-        gfx.fillStyle(def.color, 1);
-        gfx.fillCircle(0, 0, tileSize * 0.3);
-        gfx.setPosition(startPos.x, startPos.y);
+        // Create the animated sprite for the enemy monster.
+        // WHY? Replaces simple placeholder circles with beautiful walking characters!
+        // We load the transparent canvas texture we processed dynamically in TDScene.js.
+        const sprite = this.scene.add.sprite(startPos.x, startPos.y, `${type}_clean`, 'frame_0');
+        
+        // Scale the 512x512 frame down to fit our grid tile (40px).
+        // Bosses are scaled to be larger and more intimidating (1.4 times tile size).
+        const targetSize = type === 'boss' ? tileSize * 1.4 : tileSize * 0.8;
+        sprite.setScale(targetSize / 512);
+
+        // Start playing the loop walking animation.
+        sprite.play(`${type}_walk`);
 
         /* Health bar: thin bar above the enemy that shrinks as it takes damage.
            WHY a separate graphics object? So we can update it independently
@@ -113,7 +117,7 @@ class EnemyManager {
             y: startPos.y,
             pathIndex: 1, // Start heading toward the SECOND waypoint (index 1)
             path: [...this.currentPath], // Copy so each enemy has its own path ref
-            graphics: gfx,
+            sprite: sprite, // Ref to the Phaser Sprite object
             hpBar,
             
             // Effect Stats
@@ -136,7 +140,7 @@ class EnemyManager {
                 if (this.health <= 0) {
                     this.health = 0;
                     this.active = false;
-                    this.graphics.destroy();
+                    this.sprite.destroy();
                     this.hpBar.destroy();
                 }
             },
@@ -224,7 +228,7 @@ class EnemyManager {
             if (enemy.pathIndex >= enemy.path.length) {
                 /* Enemy reached the exit — remove it and cost the player a life */
                 enemy.active = false;
-                enemy.graphics.destroy();
+                enemy.sprite.destroy();
                 enemy.hpBar.destroy();
                 reachedExit++;
                 continue;
@@ -257,8 +261,10 @@ class EnemyManager {
                 enemy.y += (dy / dist) * moveDistance;
             }
 
-            /* Update the visual position of the enemy circle */
-            enemy.graphics.setPosition(enemy.x, enemy.y);
+            /* Update the visual position and rotation of the enemy sprite
+               WHY rotation? Adjusting rotation based on angle of movement makes the sprite face the correct direction. */
+            enemy.sprite.setPosition(enemy.x, enemy.y);
+            enemy.sprite.rotation = Math.atan2(dy, dx);
 
             /* --- Health Bar ---
                Draw a thin bar above the enemy. Green portion = remaining HP. */
@@ -301,7 +307,7 @@ class EnemyManager {
      */
     clearAll() {
         for (const enemy of this.enemies) {
-            if (enemy.graphics && enemy.graphics.active) enemy.graphics.destroy();
+            if (enemy.sprite && enemy.sprite.active) enemy.sprite.destroy();
             if (enemy.hpBar && enemy.hpBar.active) enemy.hpBar.destroy();
         }
         this.enemies = [];
