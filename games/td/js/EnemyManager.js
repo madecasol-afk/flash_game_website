@@ -98,10 +98,12 @@ class EnemyManager {
         // We load the transparent canvas texture we processed dynamically in TDScene.js.
         const sprite = this.scene.add.sprite(startPos.x, startPos.y, `${type}_clean`, 'frame_0');
         
-        // Scale the 256x256 frame down to fit our grid tile (40px).
+        // Scale the frame down to fit our grid tile (40px).
         // Bosses are scaled to be larger and more intimidating (1.4 times tile size).
+        // WHY divide by sprite.frame.width? Our auto-layout processor slices some sheets as 512x512
+        // and others as 256x256. Dividing by the frame's actual width ensures perfect scaling for all layout types.
         const targetSize = type === 'boss' ? tileSize * 1.4 : tileSize * 0.8;
-        sprite.setScale(targetSize / 256);
+        sprite.setScale(targetSize / sprite.frame.width);
 
         // Start playing the loop walking animation.
         sprite.play(`${type}_walk`);

@@ -64,6 +64,12 @@ class TDScene extends Phaser.Scene {
             const imgData = context.getImageData(0, 0, 1024, 1024);
             const data = imgData.data;
 
+            // Track colored pixels distribution to auto-detect layout (2x2 vs 1x4)
+            let hasTopPixels = false;
+            let hasBottomPixels = false;
+            let minY = 1024;
+            let maxY = 0;
+
             // Chromakey loop: Set alpha to 0 for checkerboard grid background pixels.
             // WHY? The background is a grid of alternating light-grey and white squares.
             // Since grey and white pixels have Red, Green, and Blue values that are extremely close to each other,
@@ -79,19 +85,52 @@ class TDScene extends Phaser.Scene {
 
                 if (isGreyOrWhite) {
                     data[i+3] = 0; // Set alpha to 0 (make pixel fully transparent)
+                } else {
+                    // Pixel is part of the colored monster!
+                    // Calculate pixel coordinates
+                    const pixelIndex = i / 4;
+                    const pxY = Math.floor(pixelIndex / 1024);
+
+                    if (pxY < minY) minY = pxY;
+                    if (pxY > maxY) maxY = pxY;
+
+                    // Check if we have colored pixels near the top or bottom edges (determines grid vs strip)
+                    if (pxY < 250) hasTopPixels = true;
+                    if (pxY > 770) hasBottomPixels = true;
                 }
             }
             context.putImageData(imgData, 0, 0);
             canvasTexture.refresh();
 
-            // Slice into a 1x4 horizontal row of 256x256 frames
-            // WHY? The sprite sheet we generated contains 4 walk animation frames lined up horizontally
-            // in the middle of a 1024x1024 image.
-            // Each frame starts at y=384 (centered vertically) and is 256x256 pixels.
-            canvasTexture.add('frame_0', 0, 0, 384, 256, 256);
-            canvasTexture.add('frame_1', 0, 256, 384, 256, 256);
-            canvasTexture.add('frame_2', 0, 512, 384, 256, 256);
-            canvasTexture.add('frame_3', 0, 768, 384, 256, 256);
+            // Detect Layout:
+            // If we have colored pixels at both the top and bottom of the sheet, it's a 2x2 grid.
+            // Otherwise, it's a 1x4 horizontal strip centered in the middle.
+            // WHY? Different AI models lay out animations differently. Slicing dynamically ensures
+            // all of our enemy graphics render without clipping.
+            const is2x2Grid = hasTopPixels && hasBottomPixels;
+
+            if (is2x2Grid) {
+                // Slice into 2x2 grid of 512x512 frames
+                canvasTexture.add('frame_0', 0, 0, 0, 512, 512);
+                canvasTexture.add('frame_1', 0, 512, 0, 512, 512);
+                canvasTexture.add('frame_2', 0, 0, 512, 512, 512);
+                canvasTexture.add('frame_3', 0, 512, 512, 512, 512);
+            } else {
+                // Determine vertical center of the horizontal strip
+                if (minY >= maxY) {
+                    minY = 384;
+                    maxY = 640;
+                }
+                const midY = Math.floor((minY + maxY) / 2);
+                let sliceY = midY - 128; // Center the 256px frame vertically
+                sliceY = Math.max(0, Math.min(768, sliceY));
+
+                // Slice into a 1x4 horizontal row of 256x256 frames
+                canvasTexture.add('frame_0', 0, 0, sliceY, 256, 256);
+                canvasTexture.add('frame_1', 0, 256, sliceY, 256, 256);
+                canvasTexture.add('frame_2', 0, 512, sliceY, 256, 256);
+                canvasTexture.add('frame_3', 0, 768, sliceY, 256, 256);
+            }
         };
 
         processTexture('basic_clean', 'scout_raw');
