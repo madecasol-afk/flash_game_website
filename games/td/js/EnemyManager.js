@@ -156,8 +156,14 @@ class EnemyManager {
             if (!enemy.active) {
                 /* Check if enemy just died (health was set to 0 by takeDamage) */
                 if (enemy.health <= 0 && enemy.reward > 0) {
-                    killed.push(enemy);
-                    enemy.reward = 0; // Prevent double-counting
+                    /* WHY push a new object instead of the enemy itself?
+                       We set enemy.reward = 0 right after to prevent
+                       double-counting. But since arrays hold REFERENCES
+                       (not copies), TDScene would read the already-zeroed
+                       value. By pushing { reward: enemy.reward }, we
+                       capture a snapshot of the reward BEFORE zeroing. */
+                    killed.push({ reward: enemy.reward });
+                    enemy.reward = 0;
                 }
                 continue;
             }
