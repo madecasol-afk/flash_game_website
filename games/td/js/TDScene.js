@@ -80,9 +80,12 @@ class TDScene extends Phaser.Scene {
                 const r = data[idx * 4];
                 const g = data[idx * 4 + 1];
                 const b = data[idx * 4 + 2];
-                // Checkerboards are bright and colorless (grey/white).
-                return (r > 190 && g > 190 && b > 190) &&
-                       (Math.abs(r - g) < 10 && Math.abs(r - b) < 10 && Math.abs(g - b) < 10);
+                // Checkerboards are grey/white. Due to JPEG compression and shadows,
+                // edge pixels might be darker (e.g. R=158) or have chromatic noise.
+                // We check if the pixel is relatively colorless (a shade of grey)
+                // by ensuring channels are within 25 values, but prevent dark blacks (r<100) to protect outlines.
+                return (r > 100 && g > 100 && b > 100) &&
+                       (Math.abs(r - g) < 25 && Math.abs(r - b) < 25 && Math.abs(g - b) < 25);
             };
 
             const pushEdge = (idx) => {
