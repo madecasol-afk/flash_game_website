@@ -424,6 +424,59 @@ class TDScene extends Phaser.Scene {
             }
         });
 
+        /* --- Mass Upgrade Event Handler ---
+           Upgrades the Power (Damage) stat for ALL towers of a specific class. */
+        this.events.on('mass-upgrade', (towerClass) => {
+            const def = GAME_CONFIG.towers[towerClass];
+            if (!def) return;
+
+            let totalCost = 0;
+            let count = 0;
+            const towersToUpgrade = [];
+
+            // 1. Calculate total cost to verify affordability
+            for (const tower of this.towerManager.towers) {
+                if (tower.type === towerClass) {
+                    const dmgCost = Math.round(def.cost * Math.pow(1.15, tower.damageLevel));
+                    totalCost += dmgCost;
+                    count++;
+                    towersToUpgrade.push({ tower, cost: dmgCost });
+                }
+            }
+
+            // 2. Perform the upgrade if affordable
+            if (count > 0 && this.gold >= totalCost) {
+                this.gold -= totalCost;
+                this.hud.setGold(this.gold);
+
+                for (const { tower, cost } of towersToUpgrade) {
+                    tower.damageLevel++;
+                    tower.damageSpent += cost;
+                    
+                    if (def.damage > 0) {
+                        tower.baseDamage = def.damage * Math.pow(1.10, tower.damageLevel);
+                        tower.damage = tower.baseDamage;
+                    }
+                    if (def.goldGeneration) tower.goldGeneration = def.goldGeneration * Math.pow(1.10, tower.damageLevel);
+                    if (def.buffMultiplier) tower.buffMultiplier = 1.0 + ((def.buffMultiplier - 1.0) * Math.pow(1.10, tower.damageLevel));
+                    if (def.slowMultiplier) tower.slowMultiplier = def.slowMultiplier * Math.pow(0.95, tower.damageLevel);
+                    if (def.poisonDamage) tower.poisonDamage = def.poisonDamage * Math.pow(1.10, tower.damageLevel);
+                    if (def.chainTargets) tower.chainTargets = def.chainTargets + Math.floor(tower.damageLevel / 5);
+
+                    this.towerManager.redrawTower(tower);
+                }
+
+                this.towerManager.recalculateBuffs();
+
+                // Refresh inspector if one of these towers is currently selected
+                if (this.inspectedTower && this.inspectedTower.type === towerClass) {
+                    this.hud.showInspectedTowerDetails(this.inspectedTower);
+                }
+
+                this.cameras.main.flash(200, 46, 204, 113, false); // Green flash for mass upgrade
+            }
+        });
+
         /* --- Tower Sell Event Handler ---
            WHY? When a player clicks the "Sell" button in the HUD inspector, it emits this event.
            We reuse the towerManager's sell function, award the refund gold, recalculate paths and buffs,

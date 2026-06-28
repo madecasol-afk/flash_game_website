@@ -154,6 +154,25 @@
             <span class="tower-cost">Free</span>
         </button>
 
+        <!-- Mass Upgrade Panel -->
+        <div class="mass-upgrade-panel" style="margin-top: 15px; border-top: 1px solid #444; padding-top: 15px;">
+            <div style="font-size: 14px; margin-bottom: 8px; color: #fff; font-weight: bold;">Mass Power Upgrade:</div>
+            <select id="mass-upgrade-class" style="width: 100%; padding: 8px; background: #222; color: #fff; border: 1px solid #555; border-radius: 4px; margin-bottom: 8px; font-family: inherit;">
+                <option value="basic">Blaster</option>
+                <option value="sniper">Sniper</option>
+                <option value="frost">Frost</option>
+                <option value="poisoner">Poisoner</option>
+                <option value="splash">Grenadier</option>
+                <option value="booster">Buffer</option>
+                <option value="tesla">Tesla Coil</option>
+                <option value="miner">Gold Miner</option>
+                <option value="doomray">Doom Ray</option>
+            </select>
+            <button id="mass-upgrade-btn" style="width: 100%; background-color: #2a2a2a; border-radius: 4px; border: 1px solid #666; cursor: pointer; color: white; padding: 10px; font-family: inherit; font-weight: bold; transition: background-color 0.2s;">
+                Upgrade All (0g)
+            </button>
+        </div>
+
         <!-- Tower Inspector Pane: Hovering a tower button updates this area with stats.
              WHY? Allows players to compare tower damage, range, and descriptions before spending gold. -->
         <div class="tower-inspector" id="tower-inspector">

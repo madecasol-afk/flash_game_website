@@ -35,7 +35,20 @@ class HUD {
         /* Tower shop buttons */
         this.towerButtons = document.querySelectorAll('.tower-btn');
 
+        /* Mass Upgrade */
+        this.massUpgradeSelect = document.getElementById('mass-upgrade-class');
+        this.massUpgradeBtn = document.getElementById('mass-upgrade-btn');
+
         this._setupTowerShop();
+        this._setupMassUpgrade();
+    }
+
+    _setupMassUpgrade() {
+        this.massUpgradeSelect.addEventListener('change', () => this.updateMassUpgradeButton());
+        this.massUpgradeBtn.addEventListener('click', () => {
+            const towerClass = this.massUpgradeSelect.value;
+            this.scene.events.emit('mass-upgrade', towerClass);
+        });
     }
 
     /**
@@ -196,6 +209,47 @@ class HUD {
      */
     setGold(gold) {
         this.goldEl.textContent = gold;
+        this.updateMassUpgradeButton();
+    }
+
+    /**
+     * updateMassUpgradeButton — Calculates the total cost to upgrade all towers of the selected type.
+     */
+    updateMassUpgradeButton() {
+        const towerClass = this.massUpgradeSelect.value;
+        const def = GAME_CONFIG.towers[towerClass];
+        if (!def) return;
+        
+        let totalCost = 0;
+        let count = 0;
+        
+        for (const tower of this.towerManager.towers) {
+            if (tower.type === towerClass) {
+                const dmgCost = Math.round(def.cost * Math.pow(1.15, tower.damageLevel));
+                totalCost += dmgCost;
+                count++;
+            }
+        }
+        
+        const currentGold = parseInt(this.goldEl.textContent) || 0;
+        
+        if (count === 0) {
+            this.massUpgradeBtn.textContent = `0 ${def.name}s Built`;
+            this.massUpgradeBtn.disabled = true;
+            this.massUpgradeBtn.style.backgroundColor = '#2a2a2a';
+            this.massUpgradeBtn.style.color = '#777';
+        } else {
+            this.massUpgradeBtn.textContent = `Power Up All ${count} (${totalCost}g)`;
+            if (currentGold >= totalCost) {
+                this.massUpgradeBtn.disabled = false;
+                this.massUpgradeBtn.style.backgroundColor = '#27ae60'; // Green
+                this.massUpgradeBtn.style.color = '#fff';
+            } else {
+                this.massUpgradeBtn.disabled = true;
+                this.massUpgradeBtn.style.backgroundColor = '#2a2a2a';
+                this.massUpgradeBtn.style.color = '#777';
+            }
+        }
     }
 
     /**
