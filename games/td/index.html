@@ -95,6 +95,16 @@
             <span class="tower-name">Sell Mode</span>
             <span class="tower-cost">70% Return</span>
         </button>
+
+        <!-- Move Mode: Clicking this enters a state where clicking a tower picks it up
+             and clicking an empty tile places it there. Only allowed between waves.
+             WHY? Giving players the ability to rearrange their defense for free between waves
+             adds a unique strategic layer and makes the game more forgiving. -->
+        <button class="tower-btn" id="tower-move" data-tower="move">
+            <span class="tower-icon">🤚</span>
+            <span class="tower-name">Move Mode</span>
+            <span class="tower-cost">Free (No Wave)</span>
+        </button>
     </div>
 
     <!-- ========== GAME SCRIPTS ========== 

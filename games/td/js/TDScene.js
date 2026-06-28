@@ -87,36 +87,97 @@ class TDScene extends Phaser.Scene {
             }
         });
 
-        /* --- Handle Canvas Clicks (Tower Placement & Selling) ---
+        /* --- Track Mouse Movement for Range Visualization ---
+           WHY? We create a dedicated graphics object to draw the semi-transparent circle.
+           Having a single object that clears and redraws every frame is highly performant. */
+        this.rangeIndicator = this.add.graphics();
+
+        // Listen for the cursor moving across the canvas.
+        // WHY? We want to dynamically draw the range circle under the cursor when placing/moving,
+        // or around towers when simply hovering over them.
+        this.input.on('pointermove', (pointer) => {
+            this._updateRangeIndicator(pointer);
+        });
+
+        // Clear the range drawing when the cursor leaves the game area.
+        this.input.on('pointerout', () => {
+            this.rangeIndicator.clear();
+        });
+
+        /* --- Listen for Escape Key (Cancel Selection / Cancel Move) ---
+           WHY? Standard game design. If a player changes their mind, hitting Escape
+           is the most intuitive way to abort their current action. */
+        this.input.keyboard.on('keydown-ESC', () => {
+            // If we are currently moving a tower, return it to its starting location.
+            if (this.towerManager.movingTower) {
+                this.towerManager.cancelMove();
+                this.enemyManager.refreshPath(); // Recalculate just in case
+            }
+            this.hud.deselectAllTowers();
+            this.rangeIndicator.clear();
+        });
+
+        /* --- Handle Canvas Clicks (Tower Placement, Selling, & Moving) ---
            WHY pointerdown instead of click? Phaser's input system uses
            pointerdown for consistency across mouse and touch devices. */
         this.input.on('pointerdown', (pointer) => {
             // If the game has ended, stop processing inputs.
             if (this.gameOver) return;
 
-            // If the player has selected "Sell Mode" in the tower shop:
-            // WHY? We check this mode before trying to place a tower because the player clicked with the
-            // intent of removing a tower and recovering gold, not building a new one.
+            // --- CASE 1: Sell Mode ---
             if (this.towerManager.selectedType === 'sell') {
                 const sellResult = this.towerManager.sellTower(pointer.x, pointer.y);
 
-                // If a tower was successfully found and sold at the click position:
                 if (sellResult.success) {
-                    // Add the refund gold amount to the player's bank
                     this.gold += sellResult.refund;
                     this.hud.setGold(this.gold);
-
-                    // Recalculate the path for any active or future enemies.
-                    // WHY? Removing a tower might open a shorter path that was previously blocked.
                     this.enemyManager.refreshPath();
-
-                    // Deselect "Sell Mode" in the UI so the player doesn't accidentally sell other towers.
                     this.hud.deselectAllTowers();
+                    this.rangeIndicator.clear(); // Clear range circle
                 }
-                return; // Stop execution here so we don't try to place a tower on the same click.
+                return;
             }
 
-            // Normal flow: attempt to place a tower.
+            // --- CASE 2: Move Mode ---
+            if (this.towerManager.selectedType === 'move') {
+                // If a wave is currently running, block moving!
+                // WHY? The user requested "tower can be freely moved after a wave."
+                // Moving towers while enemies are running makes it easy to cheat or break pathing calculations.
+                if (this.waveManager.waveActive) {
+                    console.log("⚠️ Cannot move towers while a wave is active!");
+                    return;
+                }
+
+                // SUB-CASE 2A: We don't have a tower picked up yet -> try to pick one up.
+                if (!this.towerManager.movingTower) {
+                    const pickedUp = this.towerManager.pickUpTower(pointer.x, pointer.y);
+                    if (pickedUp) {
+                        // Immediately refresh range drawing around the cursor
+                        this._updateRangeIndicator(pointer);
+                    }
+                }
+                // SUB-CASE 2B: We ALREADY have a tower picked up -> try to drop it at the click position.
+                else {
+                    const placed = this.towerManager.dropTower(pointer.x, pointer.y);
+                    if (placed) {
+                        // Recalculate path for enemies since the tower moved
+                        this.enemyManager.refreshPath();
+
+                        // Deselect Move Mode and clean up overlays
+                        this.hud.deselectAllTowers();
+                        this.rangeIndicator.clear();
+                    } else {
+                        // If drop failed (invalid tile or blocks path), cancel and return to origin
+                        this.towerManager.cancelMove();
+                        this.enemyManager.refreshPath(); // restore path safety
+                        this.hud.deselectAllTowers();
+                        this.rangeIndicator.clear();
+                    }
+                }
+                return;
+            }
+
+            // --- CASE 3: Normal Placement Flow ---
             const result = this.towerManager.placeTower(
                 pointer.x, pointer.y, this.gold
             );
@@ -133,6 +194,7 @@ class TDScene extends Phaser.Scene {
                 /* Deselect the tower button so the player must
                    explicitly choose again for the next placement. */
                 this.hud.deselectAllTowers();
+                this.rangeIndicator.clear();
             }
         });
 
@@ -274,5 +336,85 @@ class TDScene extends Phaser.Scene {
         requestAnimationFrame(() => {
             overlay.classList.add('visible');
         });
+    }
+
+    /**
+     * _updateRangeIndicator — Draws a circular, semi-transparent range overlay.
+     * 
+     * Purpose:
+     * This method decides what range circle to draw depending on the active game state:
+     * 1. If dragging a tower in "Move Mode", it draws the range around the snapped cursor.
+     * 2. If placing a new tower, it draws the range around the snapped cursor.
+     * 3. If hovering over an existing placed tower, it highlights that tower's range.
+     * 4. Otherwise, it clears the circle.
+     *
+     * @param {Phaser.Input.Pointer} pointer - The current mouse/touch pointer
+     * @private
+     */
+    _updateRangeIndicator(pointer) {
+        // Clear any previous range circle drawings.
+        this.rangeIndicator.clear();
+
+        // If the game is over, do not show any range overlays.
+        if (this.gameOver) return;
+
+        const tileSize = this.gridSystem.tileSize;
+
+        // Convert the raw mouse pixel coordinates intoSnapped grid tile coordinates.
+        const { col, row } = this.gridSystem.pixelToTile(pointer.x, pointer.y);
+
+        // Convert grid tile coordinate back to pixel center coordinate.
+        const snapPos = this.gridSystem.tileToPixel(col, row);
+
+        let rangeTiles = 0;
+        let drawX = snapPos.x;
+        let drawY = snapPos.y;
+
+        // CASE 1: The player is in Move Mode and dragging a picked up tower.
+        if (this.towerManager.selectedType === 'move' && this.towerManager.movingTower) {
+            rangeTiles = this.towerManager.movingTower.range;
+            
+            // Move the ghost tower graphics along with the snapped cursor!
+            // WHY? It makes the dragging action look snapped and responsive.
+            this.towerManager.movingTower.graphics.setPosition(snapPos.x, snapPos.y);
+        }
+        // CASE 2: The player has selected a tower from the shop to place.
+        else if (this.towerManager.selectedType && this.towerManager.selectedType !== 'sell' && this.towerManager.selectedType !== 'move') {
+            const towerDef = GAME_CONFIG.towers[this.towerManager.selectedType];
+            rangeTiles = towerDef.range;
+        }
+        // CASE 3: Hovering over an existing placed tower.
+        else {
+            // Search the towers list for a tower placed at the currently hovered grid tile.
+            // SYNTAX BREAKDOWN:
+            // - Array.prototype.find() searches the array and returns the first element that satisfies the condition.
+            const hoveredTower = this.towerManager.towers.find(t => t.col === col && t.row === row);
+            
+            if (hoveredTower) {
+                rangeTiles = hoveredTower.range;
+                
+                // Draw the circle exactly centered on the placed tower's coordinates.
+                const towerPos = this.gridSystem.tileToPixel(hoveredTower.col, hoveredTower.row);
+                drawX = towerPos.x;
+                drawY = towerPos.y;
+            }
+        }
+
+        // If we identified a valid range to draw:
+        if (rangeTiles > 0) {
+            const rangePixels = rangeTiles * tileSize;
+
+            // Set styling for the circle line (width: 2px, color: cyan (0x00ffff), alpha: 0.5)
+            this.rangeIndicator.lineStyle(2, 0x00ffff, 0.5);
+
+            // Set styling for the circle fill (color: cyan (0x00ffff), alpha: 0.15)
+            // WHY 0.15 alpha? This matches the user's request for a "partially transparent" circle,
+            // allowing them to see the grid and path through the overlay.
+            this.rangeIndicator.fillStyle(0x00ffff, 0.15);
+
+            // Draw the circle shapes.
+            this.rangeIndicator.fillCircle(drawX, drawY, rangePixels);
+            this.rangeIndicator.strokeCircle(drawX, drawY, rangePixels);
+        }
     }
 }

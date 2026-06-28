@@ -94,15 +94,14 @@ class TowerManager {
         const pos = this.gridSystem.tileToPixel(col, row);
         const tileSize = this.gridSystem.tileSize;
 
-        /* Draw the tower as a colored square with a border.
-           WHY not sprites? For the MVP, colored shapes are fast to
-           implement and easy to distinguish. We'll add sprite sheets
-           in a later polish pass. */
+        /* Draw the tower as a colored square with a border relative to (0,0).
+           WHY? By drawing the shape relative to (0,0) and using gfx.setPosition() to place it,
+           we make it incredibly easy to move the graphics object later during the "Move Mode" drag. */
         const gfx = this.scene.add.graphics();
         gfx.fillStyle(towerDef.color, 1);
         gfx.fillRoundedRect(
-            pos.x - tileSize * 0.4,
-            pos.y - tileSize * 0.4,
+            -tileSize * 0.4,
+            -tileSize * 0.4,
             tileSize * 0.8,
             tileSize * 0.8,
             4
@@ -110,12 +109,13 @@ class TowerManager {
         /* White border to make towers stand out against the grid */
         gfx.lineStyle(2, 0xffffff, 0.5);
         gfx.strokeRoundedRect(
-            pos.x - tileSize * 0.4,
-            pos.y - tileSize * 0.4,
+            -tileSize * 0.4,
+            -tileSize * 0.4,
             tileSize * 0.8,
             tileSize * 0.8,
             4
         );
+        gfx.setPosition(pos.x, pos.y);
 
         /* Store the tower data */
         const tower = {
@@ -316,6 +316,127 @@ class TowerManager {
 
         // Return success and the calculated refund amount back to the main game scene.
         return { success: true, refund: refundAmount };
+    }
+
+    /**
+     * pickUpTower — Pick up a placed tower to move it.
+     * 
+     * Purpose:
+     * This method converts the raw click position into grid coordinates, finds
+     * the tower at that tile, and marks it as the "moving tower". It unblocks the
+     * tile in the grid system so it is no longer considered occupied. It also
+     * lowers the opacity of the tower graphics to give a "ghost" drag effect.
+     *
+     * @param {number} pixelX - Click X coordinate in pixels
+     * @param {number} pixelY - Click Y coordinate in pixels
+     * @returns {boolean} True if a tower was successfully picked up
+     */
+    pickUpTower(pixelX, pixelY) {
+        // Convert screen coordinates to grid coordinates.
+        const { col, row } = this.gridSystem.pixelToTile(pixelX, pixelY);
+
+        // Find the tower at this grid tile.
+        // SYNTAX BREAKDOWN:
+        // - Array.prototype.find() returns the first element in the array that matches the condition.
+        const tower = this.towers.find(t => t.col === col && t.row === row);
+
+        // If no tower was found, we cannot pick anything up.
+        if (!tower) {
+            return false;
+        }
+
+        // Store this tower as the one currently being moved.
+        this.movingTower = tower;
+
+        // Unblock this tile in the grid system.
+        // WHY? While the player is dragging the tower around, that tile should be free
+        // for other towers to be placed, or for enemies to pass through.
+        this.gridSystem.unblockTile(col, row);
+
+        // Make the tower semi-transparent to visually indicate it has been picked up.
+        // WHY? It gives the player feedback that the tower is in a "ghost" state.
+        tower.graphics.setAlpha(0.5);
+
+        return true;
+    }
+
+    /**
+     * dropTower — Place the currently picked up tower at a new tile location.
+     * 
+     * Purpose:
+     * This method checks if the snapped tile under the cursor is valid (buildable
+     * and doesn't block the enemy path). If it is, it snaps the tower to the new grid
+     * position, updates its properties, resets its opacity, blocks the new tile,
+     * and clears the moving tower state.
+     *
+     * @param {number} pixelX - Click X coordinate in pixels
+     * @param {number} pixelY - Click Y coordinate in pixels
+     * @returns {boolean} True if the tower was successfully placed at the new location
+     */
+    dropTower(pixelX, pixelY) {
+        // If there is no tower being moved, do nothing.
+        if (!this.movingTower) {
+            return false;
+        }
+
+        // Convert raw click coordinates to grid coordinates.
+        const { col, row } = this.gridSystem.pixelToTile(pixelX, pixelY);
+
+        // Check if the tile is buildable (grass, no existing tower).
+        // WHY? We can't drop a tower on a path or on top of another tower.
+        if (!this.gridSystem.isBuildable(col, row)) {
+            return false;
+        }
+
+        // Validate that dropping the tower here won't block all pathfinding routes.
+        // WHY? Same reason as normal placement — we can't completely trap enemies.
+        const pathStillExists = this.pathfinder.isPathPossible(col, row);
+        if (!pathStillExists) {
+            return false;
+        }
+
+        // Update the tower's grid coordinates to the new values.
+        this.movingTower.col = col;
+        this.movingTower.row = row;
+
+        // Get the pixel center of the new tile.
+        const pos = this.gridSystem.tileToPixel(col, row);
+
+        // Snap the graphics object to the center of the new tile.
+        this.movingTower.graphics.setPosition(pos.x, pos.y);
+
+        // Restore the full opacity of the tower graphics.
+        this.movingTower.graphics.setAlpha(1.0);
+
+        // Block this new tile in the grid system.
+        this.gridSystem.blockTile(col, row);
+
+        // Clear the moving state.
+        this.movingTower = null;
+
+        return true;
+    }
+
+    /**
+     * cancelMove — Return the moving tower to its original coordinates if the move is cancelled.
+     * 
+     * Purpose:
+     * If the player cancels the move, we put the tower back to where it was picked up,
+     * restore its full opacity, and block its original grid tile again.
+     */
+    cancelMove() {
+        if (!this.movingTower) return;
+
+        // Restore the tower graphics to its original position.
+        const pos = this.gridSystem.tileToPixel(this.movingTower.col, this.movingTower.row);
+        this.movingTower.graphics.setPosition(pos.x, pos.y);
+        this.movingTower.graphics.setAlpha(1.0);
+
+        // Block the original tile in the grid system again.
+        this.gridSystem.blockTile(this.movingTower.col, this.movingTower.row);
+
+        // Reset the moving tower state.
+        this.movingTower = null;
     }
 }
 
