@@ -425,8 +425,8 @@ class TDScene extends Phaser.Scene {
         });
 
         /* --- Mass Upgrade Event Handler ---
-           Upgrades the Power (Damage) stat for ALL towers of a specific class. */
-        this.events.on('mass-upgrade', (towerClass) => {
+           Upgrades a specific stat for ALL towers of a specific class. */
+        this.events.on('mass-upgrade', (towerClass, upgradeType) => {
             const def = GAME_CONFIG.towers[towerClass];
             if (!def) return;
 
@@ -437,10 +437,18 @@ class TDScene extends Phaser.Scene {
             // 1. Calculate total cost to verify affordability
             for (const tower of this.towerManager.towers) {
                 if (tower.type === towerClass) {
-                    const dmgCost = Math.round(def.cost * Math.pow(1.15, tower.damageLevel));
-                    totalCost += dmgCost;
+                    let cost = 0;
+                    if (upgradeType === 'damage') {
+                        cost = Math.round(def.cost * Math.pow(1.15, tower.damageLevel));
+                    } else if (upgradeType === 'speed') {
+                        if (tower.fireRate >= 15) continue; // Skip if maxed out
+                        cost = Math.round((def.cost * 1.5) * Math.pow(1.15, tower.speedLevel));
+                    } else if (upgradeType === 'range') {
+                        cost = Math.round((def.cost * 0.8) * Math.pow(1.15, tower.rangeLevel));
+                    }
+                    totalCost += cost;
                     count++;
-                    towersToUpgrade.push({ tower, cost: dmgCost });
+                    towersToUpgrade.push({ tower, cost });
                 }
             }
 
@@ -450,18 +458,30 @@ class TDScene extends Phaser.Scene {
                 this.hud.setGold(this.gold);
 
                 for (const { tower, cost } of towersToUpgrade) {
-                    tower.damageLevel++;
-                    tower.damageSpent += cost;
-                    
-                    if (def.damage > 0) {
-                        tower.baseDamage = def.damage * Math.pow(1.10, tower.damageLevel);
-                        tower.damage = tower.baseDamage;
+                    if (upgradeType === 'damage') {
+                        tower.damageLevel++;
+                        tower.damageSpent += cost;
+                        if (def.damage > 0) {
+                            tower.baseDamage = def.damage * Math.pow(1.10, tower.damageLevel);
+                            tower.damage = tower.baseDamage;
+                        }
+                        if (def.goldGeneration) tower.goldGeneration = def.goldGeneration * Math.pow(1.10, tower.damageLevel);
+                        if (def.buffMultiplier) tower.buffMultiplier = 1.0 + ((def.buffMultiplier - 1.0) * Math.pow(1.10, tower.damageLevel));
+                        if (def.slowMultiplier) tower.slowMultiplier = def.slowMultiplier * Math.pow(0.95, tower.damageLevel);
+                        if (def.poisonDamage) tower.poisonDamage = def.poisonDamage * Math.pow(1.10, tower.damageLevel);
+                        if (def.chainTargets) tower.chainTargets = def.chainTargets + Math.floor(tower.damageLevel / 5);
+                    } else if (upgradeType === 'speed') {
+                        tower.speedLevel++;
+                        tower.speedSpent += cost;
+                        tower.baseFireRate = def.fireRate + (0.2 * tower.speedLevel);
+                        if (tower.baseFireRate > 15) tower.baseFireRate = 15;
+                        tower.fireRate = tower.baseFireRate;
+                    } else if (upgradeType === 'range') {
+                        tower.rangeLevel++;
+                        tower.rangeSpent += cost;
+                        tower.baseRange = def.range + (0.2 * tower.rangeLevel);
+                        tower.range = tower.baseRange;
                     }
-                    if (def.goldGeneration) tower.goldGeneration = def.goldGeneration * Math.pow(1.10, tower.damageLevel);
-                    if (def.buffMultiplier) tower.buffMultiplier = 1.0 + ((def.buffMultiplier - 1.0) * Math.pow(1.10, tower.damageLevel));
-                    if (def.slowMultiplier) tower.slowMultiplier = def.slowMultiplier * Math.pow(0.95, tower.damageLevel);
-                    if (def.poisonDamage) tower.poisonDamage = def.poisonDamage * Math.pow(1.10, tower.damageLevel);
-                    if (def.chainTargets) tower.chainTargets = def.chainTargets + Math.floor(tower.damageLevel / 5);
 
                     this.towerManager.redrawTower(tower);
                 }

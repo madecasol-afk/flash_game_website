@@ -37,7 +37,9 @@ class HUD {
 
         /* Mass Upgrade */
         this.massUpgradeSelect = document.getElementById('mass-upgrade-class');
-        this.massUpgradeBtn = document.getElementById('mass-upgrade-btn');
+        this.massDmgBtn = document.getElementById('mass-upgrade-dmg-btn');
+        this.massSpdBtn = document.getElementById('mass-upgrade-spd-btn');
+        this.massRngBtn = document.getElementById('mass-upgrade-rng-btn');
 
         this._setupTowerShop();
         this._setupMassUpgrade();
@@ -45,9 +47,15 @@ class HUD {
 
     _setupMassUpgrade() {
         this.massUpgradeSelect.addEventListener('change', () => this.updateMassUpgradeButton());
-        this.massUpgradeBtn.addEventListener('click', () => {
-            const towerClass = this.massUpgradeSelect.value;
-            this.scene.events.emit('mass-upgrade', towerClass);
+        
+        this.massDmgBtn.addEventListener('click', () => {
+            this.scene.events.emit('mass-upgrade', this.massUpgradeSelect.value, 'damage');
+        });
+        this.massSpdBtn.addEventListener('click', () => {
+            this.scene.events.emit('mass-upgrade', this.massUpgradeSelect.value, 'speed');
+        });
+        this.massRngBtn.addEventListener('click', () => {
+            this.scene.events.emit('mass-upgrade', this.massUpgradeSelect.value, 'range');
         });
     }
 
@@ -220,36 +228,45 @@ class HUD {
         const def = GAME_CONFIG.towers[towerClass];
         if (!def) return;
         
-        let totalCost = 0;
+        let dmgCost = 0;
+        let spdCost = 0;
+        let rngCost = 0;
         let count = 0;
         
         for (const tower of this.towerManager.towers) {
             if (tower.type === towerClass) {
-                const dmgCost = Math.round(def.cost * Math.pow(1.15, tower.damageLevel));
-                totalCost += dmgCost;
+                dmgCost += Math.round(def.cost * Math.pow(1.15, tower.damageLevel));
+                spdCost += Math.round((def.cost * 1.5) * Math.pow(1.15, tower.speedLevel));
+                rngCost += Math.round((def.cost * 0.8) * Math.pow(1.15, tower.rangeLevel));
                 count++;
             }
         }
         
         const currentGold = parseInt(this.goldEl.textContent) || 0;
         
-        if (count === 0) {
-            this.massUpgradeBtn.textContent = `0 ${def.name}s Built`;
-            this.massUpgradeBtn.disabled = true;
-            this.massUpgradeBtn.style.backgroundColor = '#2a2a2a';
-            this.massUpgradeBtn.style.color = '#777';
-        } else {
-            this.massUpgradeBtn.textContent = `Power Up All ${count} (${totalCost}g)`;
-            if (currentGold >= totalCost) {
-                this.massUpgradeBtn.disabled = false;
-                this.massUpgradeBtn.style.backgroundColor = '#27ae60'; // Green
-                this.massUpgradeBtn.style.color = '#fff';
+        const updateBtn = (btn, cost, icon, isValid) => {
+            if (count === 0 || !isValid) {
+                btn.textContent = `${icon} -`;
+                btn.disabled = true;
+                btn.style.backgroundColor = '#2a2a2a';
+                btn.style.color = '#777';
             } else {
-                this.massUpgradeBtn.disabled = true;
-                this.massUpgradeBtn.style.backgroundColor = '#2a2a2a';
-                this.massUpgradeBtn.style.color = '#777';
+                btn.textContent = `${icon} ${cost}g`;
+                if (currentGold >= cost) {
+                    btn.disabled = false;
+                    btn.style.backgroundColor = '#27ae60';
+                    btn.style.color = '#fff';
+                } else {
+                    btn.disabled = true;
+                    btn.style.backgroundColor = '#2a2a2a';
+                    btn.style.color = '#777';
+                }
             }
-        }
+        };
+
+        updateBtn(this.massDmgBtn, dmgCost, '⚔️', true);
+        updateBtn(this.massSpdBtn, spdCost, '⚡', def.fireRate > 0);
+        updateBtn(this.massRngBtn, rngCost, '🎯', def.range > 0);
     }
 
     /**
