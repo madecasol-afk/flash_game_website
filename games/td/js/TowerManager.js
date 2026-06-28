@@ -689,5 +689,58 @@ class TowerManager {
             }
         }
     }
+
+    /**
+     * redrawTower — Re-renders a placed tower's graphics to display its upgrade level.
+     * 
+     * Purpose:
+     * When a tower is upgraded, we clear its previous graphics context and draw tiny
+     * gold circles to visually communicate its tier level to the player.
+     *
+     * @param {object} tower - The tower object to re-render
+     */
+    redrawTower(tower) {
+        const tileSize = this.gridSystem.tileSize;
+        const towerDef = GAME_CONFIG.towers[tower.type];
+        const gfx = tower.graphics;
+        
+        // Clear all previous lines and shapes drawn on this graphics container.
+        // WHY? Phaser keeps drawings in a buffer. If we don't call clear(), the new drawings
+        // will overlap on top of the old ones, wasting rendering performance and looking messy.
+        gfx.clear();
+
+        // 1. Base shape
+        gfx.fillStyle(towerDef.color, 1);
+        gfx.fillRoundedRect(
+            -tileSize * 0.4,
+            -tileSize * 0.4,
+            tileSize * 0.8,
+            tileSize * 0.8,
+            4
+        );
+        
+        // 2. White border
+        gfx.lineStyle(2, 0xffffff, 0.5);
+        gfx.strokeRoundedRect(
+            -tileSize * 0.4,
+            -tileSize * 0.4,
+            tileSize * 0.8,
+            tileSize * 0.8,
+            4
+        );
+
+        // 3. Upgrade level indicator dots
+        // We draw tiny golden circles in the center of the tower.
+        // - Level 1 (First Upgrade): One central dot.
+        // - Level 2 (Second/Max Upgrade): Two side-by-side dots.
+        // WHY? Visual progression keeps the player engaged and makes it easy to spot fully-upgraded towers at a glance.
+        gfx.fillStyle(0xffd93d, 1); // Gold color
+        if (tower.level === 1) {
+            gfx.fillCircle(0, 0, 3.5); // 1 dot in the middle
+        } else if (tower.level === 2) {
+            gfx.fillCircle(-6, 0, 3.5); // 2 dots side by side
+            gfx.fillCircle(6, 0, 3.5);
+        }
+    }
 }
 

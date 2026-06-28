@@ -13,10 +13,12 @@
  */
 class HUD {
     /**
+     * @param {Phaser.Scene} scene       - The active Phaser scene
      * @param {TowerManager} towerManager - So the shop buttons can tell
      *   TowerManager which tower type the player selected.
      */
-    constructor(towerManager) {
+    constructor(scene, towerManager) {
+        this.scene = scene;
         this.towerManager = towerManager;
 
         /* Cache DOM references for performance.
@@ -228,5 +230,108 @@ class HUD {
     deselectAllTowers() {
         this.towerButtons.forEach(b => b.classList.remove('active'));
         this.towerManager.selectTower(null);
+    }
+
+    /**
+     * showInspectedTowerDetails — Populates the inspector with a placed tower's current upgrade path.
+     * 
+     * Purpose:
+     * This method renders stats for a placed tower, shows its next upgrade cost/details, and creates
+     * interactive Upgrade and Sell buttons. Clicking these buttons emits events back to the Phaser scene.
+     *
+     * @param {object} tower - The tower object being inspected
+     */
+    showInspectedTowerDetails(tower) {
+        const titleEl = this.inspectorEl.querySelector('.inspector-title');
+        const descEl = this.inspectorEl.querySelector('.inspector-desc');
+        
+        // Clear any existing stats and action buttons inside the inspector pane.
+        // WHY? If we don't clear them, they will keep stacking up every time you click a tower.
+        const existingStats = this.inspectorEl.querySelector('.inspector-stats');
+        if (existingStats) existingStats.remove();
+        
+        const existingActions = this.inspectorEl.querySelector('.inspector-actions');
+        if (existingActions) existingActions.remove();
+
+        const def = GAME_CONFIG.towers[tower.type];
+        if (!def) return;
+
+        // Set the header to show the name and level (1-indexed for display: e.g. Lv. 1 instead of level 0)
+        titleEl.textContent = `${def.name} (Lv. ${tower.level + 1})`;
+        
+        // Read next upgrade details if available
+        const hasUpgrade = tower.level < def.upgrades.length;
+        if (hasUpgrade) {
+            const nextUpgrade = def.upgrades[tower.level];
+            descEl.textContent = `Next Upgrade: Cost: ${nextUpgrade.cost}g. `;
+            if (nextUpgrade.damage) descEl.textContent += `⚔️ Dmg +${nextUpgrade.damage - tower.damage}. `;
+            if (nextUpgrade.range) descEl.textContent += `🎯 Rng +${nextUpgrade.range - tower.range}. `;
+        } else {
+            descEl.textContent = 'Maximum upgrade level reached.';
+        }
+
+        // Current Stats Row
+        const statsEl = document.createElement('div');
+        statsEl.className = 'inspector-stats';
+        
+        const dmgText = tower.damage > 0 ? `${tower.damage}` : 'N/A';
+        const rangeText = `${tower.range} tiles`;
+        const speedText = tower.fireRate > 0 ? `${tower.fireRate}/s` : 'N/A';
+
+        statsEl.innerHTML = `
+            <span>⚔️ Dmg: ${dmgText}</span>
+            <span>🎯 Rng: ${rangeText}</span>
+            <span>⚡ Spd: ${speedText}</span>
+        `;
+        this.inspectorEl.appendChild(statsEl);
+
+        // Action Buttons Row (Upgrade & Sell)
+        // WHY HTML buttons? They are easier to click, style, and wire up than drawing custom buttons
+        // directly inside the Phaser canvas rendering loop.
+        const actionsEl = document.createElement('div');
+        actionsEl.className = 'inspector-actions';
+
+        const upgradeBtn = document.createElement('button');
+        upgradeBtn.className = 'inspector-btn';
+        if (hasUpgrade) {
+            const nextUpgrade = def.upgrades[tower.level];
+            upgradeBtn.textContent = `⚡ Upgrade (${nextUpgrade.cost}g)`;
+            // Read the current gold dynamically from the HUD element to decide if disabled
+            const currentGold = parseInt(this.goldEl.textContent);
+            if (currentGold < nextUpgrade.cost) {
+                upgradeBtn.disabled = true; // Disable if broke
+            }
+        } else {
+            upgradeBtn.textContent = '⚡ Max Level';
+            upgradeBtn.disabled = true;
+        }
+
+        const sellBtn = document.createElement('button');
+        sellBtn.className = 'inspector-btn inspector-btn--sell';
+        
+        // Calculate refund amount
+        // WHY? In TD games, selling upgraded towers should refund a portion of both the base
+        // cost and any upgrades purchased. We calculate 70% refund of the total cumulative gold spent.
+        const baseRefundRatio = 0.7;
+        let totalCost = def.cost;
+        for (let i = 0; i < tower.level; i++) {
+            totalCost += def.upgrades[i].cost;
+        }
+        const refundAmount = Math.round(totalCost * baseRefundRatio);
+        sellBtn.textContent = `💰 Sell (+${refundAmount}g)`;
+
+        // Wire click handlers to emit Phaser events back to the scene
+        // WHY events? Decouples the HTML UI from the Phaser scene core logic, making the code much easier to maintain.
+        upgradeBtn.addEventListener('click', () => {
+            this.scene.events.emit('upgrade-tower', tower);
+        });
+
+        sellBtn.addEventListener('click', () => {
+            this.scene.events.emit('sell-tower', tower);
+        });
+
+        actionsEl.appendChild(upgradeBtn);
+        actionsEl.appendChild(sellBtn);
+        this.inspectorEl.appendChild(actionsEl);
     }
 }

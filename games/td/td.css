@@ -277,6 +277,49 @@ body {
     padding-top: 4px;
 }
 
+.inspector-actions {
+    display: flex;
+    gap: var(--space-xs);
+    margin-top: var(--space-xs);
+}
+
+.inspector-btn {
+    flex: 1;
+    display: inline-block;
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--accent-start);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 0.65rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: center;
+    transition: transform 0.1s;
+}
+
+.inspector-btn:hover:not(:disabled) {
+    transform: scale(1.05);
+}
+
+.inspector-btn:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+.inspector-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: hsl(228, 10%, 15%);
+}
+
+.inspector-btn--sell {
+    background: hsl(0, 50%, 35%);
+}
+
+.inspector-btn--sell:hover:not(:disabled) {
+    background: hsl(0, 50%, 45%);
+}
+
 
 /* ---------- Game Over / Victory Overlay ---------- */
 .overlay {

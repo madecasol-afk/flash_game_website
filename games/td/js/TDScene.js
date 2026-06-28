@@ -135,11 +135,14 @@ class TDScene extends Phaser.Scene {
         /* --- Initialise HUD ---
            Must happen after TowerManager so the shop buttons can
            reference it. */
-        this.hud = new HUD(this.towerManager);
+        this.hud = new HUD(this, this.towerManager);
         this.hud.setGold(this.gold);
         this.hud.setLives(this.lives);
         this.hud.setWave(0, this.waveManager.totalWaves);
         
+        // Track the currently selected/inspected tower for upgrade overlays
+        this.inspectedTower = null;
+
         // Check and apply initial locks/unlocks for Wave 0
         this.hud.updateUnlockStates(0);
 
@@ -206,6 +209,65 @@ class TDScene extends Phaser.Scene {
             });
         });
 
+        /* --- Tower Upgrade Event Handler ---
+           WHY? When a player clicks the "Upgrade" button in the HUD inspector, it emits this event.
+           We deduct the cost, increment the level, apply updated stats (damage, range, etc.),
+           trigger a redraw of the tower's level dots, recalculate buffs, and update the HUD inspector display. */
+        this.events.on('upgrade-tower', (tower) => {
+            const def = GAME_CONFIG.towers[tower.type];
+            const upgradeDef = def.upgrades[tower.level];
+            
+            if (this.gold >= upgradeDef.cost) {
+                this.gold -= upgradeDef.cost;
+                this.hud.setGold(this.gold);
+
+                // Apply upgrade level
+                tower.level++;
+
+                // Apply new stats (fallback to current stats if upgrade doesn't change them)
+                tower.damage = upgradeDef.damage ?? tower.damage;
+                tower.range = upgradeDef.range ?? tower.range;
+                tower.fireRate = upgradeDef.fireRate ?? tower.fireRate;
+                tower.splashRadius = upgradeDef.splashRadius ?? tower.splashRadius;
+
+                // Redraw graphics to show new gold stars/dots
+                this.towerManager.redrawTower(tower);
+
+                // Recalculate booster buffs in case we upgraded a Buffer tower or a buffed tower
+                this.towerManager.recalculateBuffs();
+
+                // Refresh details pane and range indicator circle
+                this.hud.showInspectedTowerDetails(tower);
+                const pos = this.gridSystem.tileToPixel(tower.col, tower.row);
+                this._updateRangeIndicator({ x: pos.x, y: pos.y });
+
+                // Play a brief high-pitched upgrade sound effect / flash!
+                this.cameras.main.flash(150, 26, 188, 156, false); // Cyan flash
+            }
+        });
+
+        /* --- Tower Sell Event Handler ---
+           WHY? When a player clicks the "Sell" button in the HUD inspector, it emits this event.
+           We reuse the towerManager's sell function, award the refund gold, recalculate paths and buffs,
+           and clear the inspector overlay. */
+        this.events.on('sell-tower', (tower) => {
+            const pos = this.gridSystem.tileToPixel(tower.col, tower.row);
+            const sellResult = this.towerManager.sellTower(pos.x, pos.y);
+            
+            if (sellResult.success) {
+                this.gold += sellResult.refund;
+                this.hud.setGold(this.gold);
+
+                // Recalculate paths now that space is cleared
+                this.enemyManager.refreshPath();
+
+                // Clear inspector selection and range indicator circle
+                this.inspectedTower = null;
+                this.hud.showInspectorDetails(null);
+                this.rangeIndicator.clear();
+            }
+        });
+
         /* --- Track Mouse Movement for Range Visualization ---
            WHY? We create a dedicated graphics object to draw the semi-transparent circle.
            Having a single object that clears and redraws every frame is highly performant. */
@@ -232,6 +294,8 @@ class TDScene extends Phaser.Scene {
                 this.towerManager.cancelMove();
                 this.enemyManager.refreshPath(); // Recalculate just in case
             }
+            this.inspectedTower = null;
+            this.hud.showInspectorDetails(null);
             this.hud.deselectAllTowers();
             this.rangeIndicator.clear();
         });
@@ -296,24 +360,44 @@ class TDScene extends Phaser.Scene {
                 return;
             }
 
-            // --- CASE 3: Normal Placement Flow ---
-            const result = this.towerManager.placeTower(
-                pointer.x, pointer.y, this.gold
-            );
+            // --- CASE 3: Normal Placement / Selection Flow ---
+            if (this.towerManager.selectedType) {
+                // We have a tower type selected from the shop — try to build it!
+                const result = this.towerManager.placeTower(
+                    pointer.x, pointer.y, this.gold
+                );
 
-            if (result.success) {
-                /* Deduct gold and update HUD */
-                this.gold -= result.cost;
-                this.hud.setGold(this.gold);
+                if (result.success) {
+                    /* Deduct gold and update HUD */
+                    this.gold -= result.cost;
+                    this.hud.setGold(this.gold);
 
-                /* Recalculate enemy path after tower placement.
-                   WHY? The new tower might block the old route. */
-                this.enemyManager.refreshPath();
+                    /* Recalculate enemy path after tower placement. */
+                    this.enemyManager.refreshPath();
 
-                /* Deselect the tower button so the player must
-                   explicitly choose again for the next placement. */
-                this.hud.deselectAllTowers();
-                this.rangeIndicator.clear();
+                    /* Deselect the tower button so the player must
+                       explicitly choose again for the next placement. */
+                    this.hud.deselectAllTowers();
+                    this.rangeIndicator.clear();
+                }
+            } else {
+                // No shop item is selected — check if clicking an existing tower to inspect/upgrade it!
+                const { col, row } = this.gridSystem.pixelToTile(pointer.x, pointer.y);
+                const clickedTower = this.towerManager.towers.find(t => t.col === col && t.row === row);
+
+                if (clickedTower) {
+                    // Select this tower for inspection
+                    this.inspectedTower = clickedTower;
+                    this.hud.showInspectedTowerDetails(clickedTower);
+                    
+                    // Force-redraw the range overlay circle on this tower
+                    this._updateRangeIndicator(pointer);
+                } else {
+                    // Clicked empty grass — clear current inspection
+                    this.inspectedTower = null;
+                    this.hud.showInspectorDetails(null);
+                    this.rangeIndicator.clear();
+                }
             }
         });
 
@@ -502,18 +586,18 @@ class TDScene extends Phaser.Scene {
             const towerDef = GAME_CONFIG.towers[this.towerManager.selectedType];
             rangeTiles = towerDef.range;
         }
-        // CASE 3: Hovering over an existing placed tower.
+        // CASE 3: Hovering over or inspecting an existing placed tower.
         else {
-            // Search the towers list for a tower placed at the currently hovered grid tile.
-            // SYNTAX BREAKDOWN:
-            // - Array.prototype.find() searches the array and returns the first element that satisfies the condition.
             const hoveredTower = this.towerManager.towers.find(t => t.col === col && t.row === row);
             
-            if (hoveredTower) {
-                rangeTiles = hoveredTower.range;
+            // Draw range for hovered tower, or fallback to the currently inspected tower
+            const activeTower = hoveredTower || this.inspectedTower;
+            
+            if (activeTower) {
+                rangeTiles = activeTower.range;
                 
-                // Draw the circle exactly centered on the placed tower's coordinates.
-                const towerPos = this.gridSystem.tileToPixel(hoveredTower.col, hoveredTower.row);
+                // Draw the circle exactly centered on the active tower's coordinates.
+                const towerPos = this.gridSystem.tileToPixel(activeTower.col, activeTower.row);
                 drawX = towerPos.x;
                 drawY = towerPos.y;
             }
