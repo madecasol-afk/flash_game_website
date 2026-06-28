@@ -94,28 +94,23 @@ class TowerManager {
         const pos = this.gridSystem.tileToPixel(col, row);
         const tileSize = this.gridSystem.tileSize;
 
-        /* Draw the tower as a colored square with a border relative to (0,0).
-           WHY? By drawing the shape relative to (0,0) and using gfx.setPosition() to place it,
-           we make it incredibly easy to move the graphics object later during the "Move Mode" drag. */
-        const gfx = this.scene.add.graphics();
-        gfx.fillStyle(towerDef.color, 1);
-        gfx.fillRoundedRect(
-            -tileSize * 0.4,
-            -tileSize * 0.4,
-            tileSize * 0.8,
-            tileSize * 0.8,
-            4
-        );
-        /* White border to make towers stand out against the grid */
-        gfx.lineStyle(2, 0xffffff, 0.5);
-        gfx.strokeRoundedRect(
-            -tileSize * 0.4,
-            -tileSize * 0.4,
-            tileSize * 0.8,
-            tileSize * 0.8,
-            4
-        );
-        gfx.setPosition(pos.x, pos.y);
+        /* Create a container so we can group the tower sprite and upgrade dots together.
+           WHY? A container can be moved as a single unit using setPosition(). */
+        const container = this.scene.add.container(pos.x, pos.y);
+        
+        // Add the 2D tower sprite
+        const sprite = this.scene.add.sprite(0, 0, `tower_${this.selectedType}_clean`, 'cropped');
+        // Scale it to fit the tile (e.g. 90% of tileSize)
+        const scale = (tileSize * 0.9) / Math.max(sprite.width, sprite.height);
+        sprite.setScale(scale);
+        container.add(sprite);
+
+        // Add a graphics object for upgrade dots
+        const overlayGfx = this.scene.add.graphics();
+        container.add(overlayGfx);
+        
+        // Save reference for easy access in redrawTower
+        container.overlayGfx = overlayGfx;
 
         /* Store the tower data */
         const tower = {
@@ -128,7 +123,7 @@ class TowerManager {
             fireRate: towerDef.fireRate,
             splashRadius: towerDef.splashRadius,
             lastFired: 0,
-            graphics: gfx,
+            graphics: container,
         };
         this.towers.push(tower);
 
@@ -700,34 +695,12 @@ class TowerManager {
      * @param {object} tower - The tower object to re-render
      */
     redrawTower(tower) {
-        const tileSize = this.gridSystem.tileSize;
-        const towerDef = GAME_CONFIG.towers[tower.type];
-        const gfx = tower.graphics;
+        const gfx = tower.graphics.overlayGfx;
         
         // Clear all previous lines and shapes drawn on this graphics container.
         // WHY? Phaser keeps drawings in a buffer. If we don't call clear(), the new drawings
         // will overlap on top of the old ones, wasting rendering performance and looking messy.
         gfx.clear();
-
-        // 1. Base shape
-        gfx.fillStyle(towerDef.color, 1);
-        gfx.fillRoundedRect(
-            -tileSize * 0.4,
-            -tileSize * 0.4,
-            tileSize * 0.8,
-            tileSize * 0.8,
-            4
-        );
-        
-        // 2. White border
-        gfx.lineStyle(2, 0xffffff, 0.5);
-        gfx.strokeRoundedRect(
-            -tileSize * 0.4,
-            -tileSize * 0.4,
-            tileSize * 0.8,
-            tileSize * 0.8,
-            4
-        );
 
         // 3. Upgrade level indicator dots
         // We draw tiny golden circles in the center of the tower.
@@ -736,10 +709,10 @@ class TowerManager {
         // WHY? Visual progression keeps the player engaged and makes it easy to spot fully-upgraded towers at a glance.
         gfx.fillStyle(0xffd93d, 1); // Gold color
         if (tower.level === 1) {
-            gfx.fillCircle(0, 0, 3.5); // 1 dot in the middle
+            gfx.fillCircle(0, 0, 4); // 1 dot in the middle
         } else if (tower.level === 2) {
-            gfx.fillCircle(-6, 0, 3.5); // 2 dots side by side
-            gfx.fillCircle(6, 0, 3.5);
+            gfx.fillCircle(-8, 0, 4); // 2 dots side by side
+            gfx.fillCircle(8, 0, 4);
         }
     }
 }

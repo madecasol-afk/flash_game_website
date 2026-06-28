@@ -38,6 +38,18 @@ class TDScene extends Phaser.Scene {
         this.load.image('runner_raw', 'assets/images/runner.jpg');
         this.load.image('tank_raw', 'assets/images/tank.jpg');
         this.load.image('boss_raw', 'assets/images/boss.jpg');
+
+        // Load raw AI-generated tower JPEGs
+        this.load.image('tower_basic_raw', 'assets/images/towers/blaster.jpg');
+        this.load.image('tower_splash_raw', 'assets/images/towers/cannon.jpg');
+        this.load.image('tower_sniper_raw', 'assets/images/towers/sniper.jpg');
+        this.load.image('tower_slower_raw', 'assets/images/towers/frost.jpg');
+        this.load.image('tower_poisoner_raw', 'assets/images/towers/acid.jpg');
+        this.load.image('tower_laser_raw', 'assets/images/towers/laser.jpg');
+        this.load.image('tower_booster_raw', 'assets/images/towers/buffer.jpg');
+        this.load.image('tower_tesla_raw', 'assets/images/towers/tesla.jpg');
+        this.load.image('tower_miner_raw', 'assets/images/towers/miner.jpg');
+        this.load.image('tower_doomray_raw', 'assets/images/towers/doomray.jpg');
     }
 
     /* ------------------------------------------------------------------
@@ -55,7 +67,7 @@ class TDScene extends Phaser.Scene {
            WHY? The JPEGs have an off-white background (R=240, G=240, B=240). By drawing them
            onto an offscreen canvas texture, scanning pixels, and setting alpha to 0 for light pixels,
            we achieve clean transparent sprite sheets natively in browser. */
-        const processTexture = (key, rawKey) => {
+        const processTexture = (key, rawKey, sliceFrames = true) => {
             const rawImg = this.textures.get(rawKey).getSourceImage();
             const width = 1024;
             const height = 1024;
@@ -154,12 +166,17 @@ class TDScene extends Phaser.Scene {
             let hasBottomPixels = false;
             let minY = height;
             let maxY = 0;
+            let minX = width;
+            let maxX = 0;
 
             for (let i = 0; i < width * height; i++) {
                 if (data[i * 4 + 3] !== 0) {
+                    const pxX = i % width;
                     const pxY = Math.floor(i / width);
                     if (pxY < minY) minY = pxY;
                     if (pxY > maxY) maxY = pxY;
+                    if (pxX < minX) minX = pxX;
+                    if (pxX > maxX) maxX = pxX;
 
                     if (pxY < 250) hasTopPixels = true;
                     if (pxY > 770) hasBottomPixels = true;
@@ -170,36 +187,53 @@ class TDScene extends Phaser.Scene {
             canvasTexture.refresh();
 
             // 4. Adaptive Slicing
-            const is2x2Grid = hasTopPixels && hasBottomPixels;
+            if (sliceFrames) {
+                const is2x2Grid = hasTopPixels && hasBottomPixels;
 
-            if (is2x2Grid) {
-                // Slice into 2x2 grid of 512x512 frames
-                canvasTexture.add('frame_0', 0, 0, 0, 512, 512);
-                canvasTexture.add('frame_1', 0, 512, 0, 512, 512);
-                canvasTexture.add('frame_2', 0, 0, 512, 512, 512);
-                canvasTexture.add('frame_3', 0, 512, 512, 512, 512);
-            } else {
-                // Determine vertical center of the horizontal strip
-                if (minY >= maxY) {
-                    minY = 384;
-                    maxY = 640;
+                if (is2x2Grid) {
+                    // Slice into 2x2 grid of 512x512 frames
+                    canvasTexture.add('frame_0', 0, 0, 0, 512, 512);
+                    canvasTexture.add('frame_1', 0, 512, 0, 512, 512);
+                    canvasTexture.add('frame_2', 0, 0, 512, 512, 512);
+                    canvasTexture.add('frame_3', 0, 512, 512, 512, 512);
+                } else {
+                    // Determine vertical center of the horizontal strip
+                    if (minY >= maxY) {
+                        minY = 384;
+                        maxY = 640;
+                    }
+                    const midY = Math.floor((minY + maxY) / 2);
+                    let sliceY = midY - 128; // Center the 256px frame vertically
+                    sliceY = Math.max(0, Math.min(768, sliceY));
+
+                    // Slice into a 1x4 horizontal row of 256x256 frames
+                    canvasTexture.add('frame_0', 0, 0, sliceY, 256, 256);
+                    canvasTexture.add('frame_1', 0, 256, sliceY, 256, 256);
+                    canvasTexture.add('frame_2', 0, 512, sliceY, 256, 256);
+                    canvasTexture.add('frame_3', 0, 768, sliceY, 256, 256);
                 }
-                const midY = Math.floor((minY + maxY) / 2);
-                let sliceY = midY - 128; // Center the 256px frame vertically
-                sliceY = Math.max(0, Math.min(768, sliceY));
-
-                // Slice into a 1x4 horizontal row of 256x256 frames
-                canvasTexture.add('frame_0', 0, 0, sliceY, 256, 256);
-                canvasTexture.add('frame_1', 0, 256, sliceY, 256, 256);
-                canvasTexture.add('frame_2', 0, 512, sliceY, 256, 256);
-                canvasTexture.add('frame_3', 0, 768, sliceY, 256, 256);
+            } else {
+                // Static image: Just crop to the tightly bound colored box!
+                if (minY > maxY || minX > maxX) {
+                    minX = 0; minY = 0; maxX = width - 1; maxY = height - 1;
+                }
+                const bW = maxX - minX + 1;
+                const bH = maxY - minY + 1;
+                canvasTexture.add('cropped', 0, minX, minY, bW, bH);
             }
         };
 
-        processTexture('basic_clean', 'scout_raw');
-        processTexture('fast_clean', 'runner_raw');
-        processTexture('armored_clean', 'tank_raw');
-        processTexture('boss_clean', 'boss_raw');
+        // Process enemy walk cycles (sliceFrames = true)
+        processTexture('basic_clean', 'scout_raw', true);
+        processTexture('fast_clean', 'runner_raw', true);
+        processTexture('armored_clean', 'tank_raw', true);
+        processTexture('boss_clean', 'boss_raw', true);
+
+        // Process tower graphics (sliceFrames = false)
+        const towerKeys = ['basic', 'splash', 'sniper', 'slower', 'poisoner', 'laser', 'booster', 'tesla', 'miner', 'doomray'];
+        for (const tk of towerKeys) {
+            processTexture(`tower_${tk}_clean`, `tower_${tk}_raw`, false);
+        }
 
         // Create walking animations for all 4 monster types
         const createWalkAnim = (key, textureKey) => {
