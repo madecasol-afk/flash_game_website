@@ -69,6 +69,7 @@
     <div class="tower-shop" id="tower-shop">
         <h2 class="shop-title">Towers</h2>
 
+        <!-- Tier 1: Wave 0 Unlocks -->
         <button class="tower-btn" id="tower-basic" data-tower="basic">
             <span class="tower-icon">🔫</span>
             <span class="tower-name">Blaster</span>
@@ -87,24 +88,78 @@
             <span class="tower-cost">75g</span>
         </button>
 
-        <!-- Sell Mode: Clicking this enters a state where clicking a tower sells it.
-             WHY? In TD games, selling towers allows players to restructure their defense
-             dynamically as game stages advance or correct mistakes. -->
+        <!-- Tier 2: Wave 2 Unlocks -->
+        <button class="tower-btn locked" id="tower-slower" data-tower="slower" disabled>
+            <span class="tower-icon">❄️</span>
+            <span class="tower-name">Frost</span>
+            <span class="tower-cost">60g</span>
+            <span class="unlock-label">Wave 2</span>
+        </button>
+
+        <button class="tower-btn locked" id="tower-poisoner" data-tower="poisoner" disabled>
+            <span class="tower-icon">🤢</span>
+            <span class="tower-name">Acid Spitter</span>
+            <span class="tower-cost">80g</span>
+            <span class="unlock-label">Wave 2</span>
+        </button>
+
+        <button class="tower-btn locked" id="tower-laser" data-tower="laser" disabled>
+            <span class="tower-icon">⚡</span>
+            <span class="tower-name">Laser Beam</span>
+            <span class="tower-cost">100g</span>
+            <span class="unlock-label">Wave 2</span>
+        </button>
+
+        <!-- Tier 3: Wave 5 Unlocks -->
+        <button class="tower-btn locked" id="tower-booster" data-tower="booster" disabled>
+            <span class="tower-icon">🛡️</span>
+            <span class="tower-name">Buffer</span>
+            <span class="tower-cost">120g</span>
+            <span class="unlock-label">Wave 5</span>
+        </button>
+
+        <button class="tower-btn locked" id="tower-tesla" data-tower="tesla" disabled>
+            <span class="tower-icon">🌩️</span>
+            <span class="tower-name">Tesla Coil</span>
+            <span class="tower-cost">150g</span>
+            <span class="unlock-label">Wave 5</span>
+        </button>
+
+        <button class="tower-btn locked" id="tower-miner" data-tower="miner" disabled>
+            <span class="tower-icon">💎</span>
+            <span class="tower-name">Gold Miner</span>
+            <span class="tower-cost">180g</span>
+            <span class="unlock-label">Wave 5</span>
+        </button>
+
+        <button class="tower-btn locked" id="tower-doomray" data-tower="doomray" disabled>
+            <span class="tower-icon">🔴</span>
+            <span class="tower-name">Doom Ray</span>
+            <span class="tower-cost">300g</span>
+            <span class="unlock-label">Wave 5</span>
+        </button>
+
+        <hr class="shop-divider">
+
+        <!-- Tools -->
         <button class="tower-btn" id="tower-sell" data-tower="sell">
             <span class="tower-icon">💰</span>
             <span class="tower-name">Sell Mode</span>
             <span class="tower-cost">70% Return</span>
         </button>
 
-        <!-- Move Mode: Clicking this enters a state where clicking a tower picks it up
-             and clicking an empty tile places it there. Only allowed between waves.
-             WHY? Giving players the ability to rearrange their defense for free between waves
-             adds a unique strategic layer and makes the game more forgiving. -->
         <button class="tower-btn" id="tower-move" data-tower="move">
             <span class="tower-icon">🤚</span>
             <span class="tower-name">Move Mode</span>
-            <span class="tower-cost">Free (No Wave)</span>
+            <span class="tower-cost">Free</span>
         </button>
+
+        <!-- Tower Inspector Pane: Hovering a tower button updates this area with stats.
+             WHY? Allows players to compare tower damage, range, and descriptions before spending gold. -->
+        <div class="tower-inspector" id="tower-inspector">
+            <div class="inspector-title">Hover a tower to inspect</div>
+            <div class="inspector-desc">See descriptions, range, and stats here.</div>
+        </div>
     </div>
 
     <!-- ========== GAME SCRIPTS ========== 

@@ -115,6 +115,12 @@ class EnemyManager {
             path: [...this.currentPath], // Copy so each enemy has its own path ref
             graphics: gfx,
             hpBar,
+            
+            // Effect Stats
+            slowMultiplier: 1.0,      // 1.0 = normal speed, 0.5 = 50% slow
+            slowTimer: 0,             // seconds remaining for the slow effect
+            poisonDamagePerSec: 0,    // poison/acid damage taken per second
+            poisonTimer: 0,           // seconds remaining for the poison/acid effect
 
             /**
              * takeDamage — Reduce enemy health. If it drops to 0, mark as dead.
@@ -134,6 +140,28 @@ class EnemyManager {
                     this.hpBar.destroy();
                 }
             },
+
+            /**
+             * takeSlow — Applies a speed-reducing frost effect.
+             * @param {number} multiplier - Speed reduction multiplier (e.g. 0.5 = half speed)
+             * @param {number} duration - Duration of the slow effect in seconds
+             */
+            takeSlow(multiplier, duration) {
+                // Apply the slow. Keep the strongest slow (lowest multiplier) and longest duration.
+                this.slowMultiplier = Math.min(this.slowMultiplier, multiplier);
+                this.slowTimer = Math.max(this.slowTimer, duration);
+            },
+
+            /**
+             * takePoison — Applies a damage-over-time poison/acid effect.
+             * @param {number} dmgPerSec - Tick damage applied per second
+             * @param {number} duration - Duration of the poison effect in seconds
+             */
+            takePoison(dmgPerSec, duration) {
+                // Apply the poison. Keep the highest tick damage and longest duration.
+                this.poisonDamagePerSec = Math.max(this.poisonDamagePerSec, dmgPerSec);
+                this.poisonTimer = Math.max(this.poisonTimer, duration);
+            }
         };
 
         this.enemies.push(enemy);
@@ -168,6 +196,28 @@ class EnemyManager {
                 continue;
             }
 
+            // --- Tick Effects (Poison / Acid & Slow timers) ---
+            // Apply Damage Over Time (DOT) for poison/acid.
+            // WHY? Poison damage is applied continuously on every frame based on the time elapsed (delta).
+            if (enemy.poisonTimer > 0) {
+                const tickDamage = enemy.poisonDamagePerSec * delta;
+                enemy.takeDamage(tickDamage);
+                enemy.poisonTimer -= delta;
+            }
+
+            // Check if the enemy is still alive after poison damage before proceeding to move it.
+            if (!enemy.active) {
+                continue;
+            }
+
+            // Update slow timers and speed modifiers.
+            if (enemy.slowTimer > 0) {
+                enemy.slowTimer -= delta;
+                if (enemy.slowTimer <= 0) {
+                    enemy.slowMultiplier = 1.0; // Reset to full speed
+                }
+            }
+
             /* --- Movement ---
                Move toward the next waypoint in the path. When we reach it,
                advance pathIndex to the following waypoint. */
@@ -188,8 +238,10 @@ class EnemyManager {
             const dy = targetPos.y - enemy.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
-            /* How far can the enemy move this frame? */
-            const moveDistance = enemy.speed * tileSize * delta;
+            /* How far can the enemy move this frame? 
+               WHY multiply by slowMultiplier? If the enemy is frozen/slowed, their movement speed reduces accordingly. */
+            const currentSpeed = enemy.speed * enemy.slowMultiplier;
+            const moveDistance = currentSpeed * tileSize * delta;
 
             if (dist <= moveDistance) {
                 /* Close enough — snap to waypoint and advance to the next one */

@@ -132,6 +132,11 @@ class TowerManager {
         };
         this.towers.push(tower);
 
+        // Recalculate booster buffs across the grid now that a new tower is placed.
+        // WHY? If we built a Buffer tower, it should instantly boost adjacent towers. If we built a regular tower
+        // next to a Buffer, it should receive the buff immediately.
+        this.recalculateBuffs();
+
         return { success: true, cost: towerDef.cost };
     }
 
@@ -146,13 +151,17 @@ class TowerManager {
         const tileSize = this.gridSystem.tileSize;
 
         for (const tower of this.towers) {
-            /* WHY check cooldown? Each tower has a fire rate (shots/sec).
-               We compare the elapsed time since the last shot to decide
-               if the tower can fire again. */
-            const cooldownMs = 1000 / tower.fireRate;
-            if (time - tower.lastFired < cooldownMs) {
-                continue; // Still on cooldown — skip this tower
-            }
+             /* WHY check cooldown? Each tower has a fire rate (shots/sec).
+                We compare the elapsed time since the last shot to decide
+                if the tower can fire again. */
+             if (tower.fireRate === 0) {
+                 continue; // Utility tower (Gold Miner or Buffer) — does not fire projectiles
+             }
+
+             const cooldownMs = 1000 / tower.fireRate;
+             if (time - tower.lastFired < cooldownMs) {
+                 continue; // Still on cooldown — skip this tower
+             }
 
             /* Convert tower range from tiles to pixels for distance checks */
             const rangePixels = tower.range * tileSize;
@@ -197,22 +206,46 @@ class TowerManager {
      * @private
      */
     _fireAt(tower, target, towerPos, enemies) {
+        // --- Tesla Coil Special Case: Chain Lightning ---
+        // WHY? Tesla lightning jumps between multiple enemies in a jagged electrical path, which requires custom recursive logic.
+        if (tower.type === 'tesla') {
+            this._fireChainLightning(tower, target, towerPos, enemies);
+            return;
+        }
+
         const tileSize = this.gridSystem.tileSize;
 
-        /* Draw a quick projectile line from tower to enemy.
-           WHY a line instead of a moving bullet? For the MVP, an instant
-           "laser" effect is much simpler to implement. Moving projectiles
-           require tracking flight time and possibly missing the target. */
+        // Customise projectile line styles based on the tower type.
+        // WHY? Color-coded lasers instantly tell the player which tower is hitting which enemy.
+        let beamColor = 0xffffff; // Default white
+        let beamWidth = 2;        // Default 2px
+        
+        switch (tower.type) {
+            case 'slower':
+                beamColor = 0x3498db; // Ice blue
+                break;
+            case 'poisoner':
+                beamColor = 0x2ecc71; // Acid green
+                break;
+            case 'laser':
+                beamColor = 0x9b59b6; // Rapid purple
+                beamWidth = 1.5;
+                break;
+            case 'doomray':
+                beamColor = 0xe74c3c; // Thick crimson red
+                beamWidth = 4;
+                break;
+        }
+
+        /* Draw a quick projectile line from tower to enemy. */
         const line = this.scene.add.graphics();
-        line.lineStyle(2, 0xffffff, 0.8);
+        line.lineStyle(beamWidth, beamColor, 0.8);
         line.beginPath();
         line.moveTo(towerPos.x, towerPos.y);
         line.lineTo(target.x, target.y);
         line.strokePath();
 
-        /* Fade and remove the projectile line after 100ms.
-           WHY tween? Phaser's tween system handles the animation off the
-           main logic thread, keeping our update loop clean. */
+        /* Fade and remove the projectile line after 100ms. */
         this.scene.tweens.add({
             targets: line,
             alpha: 0,
@@ -220,22 +253,53 @@ class TowerManager {
             onComplete: () => line.destroy(),
         });
 
-        /* Apply damage */
-        if (tower.splashRadius > 0) {
-            /* Splash towers damage ALL enemies within the splash radius
-               centred on the target's position. */
-            const splashPixels = tower.splashRadius * tileSize;
-            for (const enemy of enemies) {
-                if (!enemy.active) continue;
-                const dx = enemy.x - target.x;
-                const dy = enemy.y - target.y;
-                if (dx * dx + dy * dy <= splashPixels * splashPixels) {
-                    enemy.takeDamage(tower.damage);
-                }
+        // --- Apply Damage and Effects ---
+        
+        // Apply Special Status Effects based on tower type:
+        if (tower.type === 'slower') {
+            // Frost Slow Effect: Reduces enemy speed.
+            const def = GAME_CONFIG.towers.slower;
+            let mult = def.slowMultiplier;
+            let dur = def.slowDuration;
+            
+            // Read upgrades if upgraded
+            for (let i = 0; i < tower.level; i++) {
+                mult = def.upgrades[i].slowMultiplier ?? mult;
+                dur = def.upgrades[i].range ?? dur; // wait, let's keep dur constant or scale
             }
-        } else {
-            /* Single-target towers only hit the one enemy */
-            target.takeDamage(tower.damage);
+            
+            target.takeSlow(mult, dur);
+        }
+        else if (tower.type === 'poisoner') {
+            // Acid Poison DOT Effect: Deals damage over time.
+            const def = GAME_CONFIG.towers.poisoner;
+            let tickDmg = def.poisonDamage;
+            let dur = def.poisonDuration;
+            
+            for (let i = 0; i < tower.level; i++) {
+                tickDmg = def.upgrades[i].poisonDamage ?? tickDmg;
+            }
+            
+            target.takePoison(tickDmg, dur);
+        }
+
+        // Apply normal hit damage
+        if (tower.damage > 0) {
+            if (tower.splashRadius > 0) {
+                /* Splash towers damage ALL enemies within the splash radius. */
+                const splashPixels = tower.splashRadius * tileSize;
+                for (const enemy of enemies) {
+                    if (!enemy.active) continue;
+                    const dx = enemy.x - target.x;
+                    const dy = enemy.y - target.y;
+                    if (dx * dx + dy * dy <= splashPixels * splashPixels) {
+                        enemy.takeDamage(tower.damage);
+                    }
+                }
+            } else {
+                /* Single-target towers only hit the one enemy */
+                target.takeDamage(tower.damage);
+            }
         }
     }
 
@@ -411,6 +475,10 @@ class TowerManager {
         // Block this new tile in the grid system.
         this.gridSystem.blockTile(col, row);
 
+        // Recalculate booster buffs across the grid now that a tower is dropped in a new position.
+        // WHY? If we moved a Buffer, it should buff its new neighbors and remove buffs from old ones.
+        this.recalculateBuffs();
+
         // Clear the moving state.
         this.movingTower = null;
 
@@ -435,8 +503,191 @@ class TowerManager {
         // Block the original tile in the grid system again.
         this.gridSystem.blockTile(this.movingTower.col, this.movingTower.row);
 
+        // Recalculate booster buffs now that the moved tower has returned to its starting spot.
+        this.recalculateBuffs();
+
         // Reset the moving tower state.
         this.movingTower = null;
+    }
+
+    /**
+     * _fireChainLightning — Fires an electrical bolt that jumps between multiple nearby enemies.
+     * 
+     * Purpose:
+     * Handles hitting a primary target, then iteratively searching for the closest active enemy
+     * within a set jump radius, drawing lightning links, and applying damage to each target.
+     *
+     * @param {object} tower - The Tesla tower firing
+     * @param {object} target - The primary enemy target
+     * @param {object} towerPos - Center coordinates of the tower
+     * @param {object[]} enemies - List of all active enemies on screen
+     * @private
+     */
+    _fireChainLightning(tower, target, towerPos, enemies) {
+        const def = GAME_CONFIG.towers.tesla;
+        let chainTargets = def.chainTargets;
+
+        // Sum upgrades if any
+        for (let i = 0; i < tower.level; i++) {
+            chainTargets = def.upgrades[i].chainTargets;
+        }
+
+        // Keep track of enemies already hit to prevent the lightning from bouncing back and forth
+        // between the same two enemies.
+        const hitEnemies = new Set();
+        let currentSource = towerPos;
+        let currentTarget = target;
+        let jumps = 0;
+
+        const maxJumpDistance = 120; // 3 tiles (in pixels) for lightning to jump
+
+        while (currentTarget && jumps < chainTargets) {
+            // Apply damage to current target
+            currentTarget.takeDamage(tower.damage);
+            hitEnemies.add(currentTarget);
+            jumps++;
+
+            // Draw a zig-zag lightning line from currentSource to currentTarget
+            this._drawLightningBolt(currentSource.x, currentSource.y, currentTarget.x, currentTarget.y);
+
+            // Find next target for the chain jump
+            let nextTarget = null;
+            let closestDist = Infinity;
+
+            for (const enemy of enemies) {
+                // Skip if the enemy is dead, out of range, or already hit by this lightning chain
+                if (!enemy.active || hitEnemies.has(enemy)) continue;
+
+                const dx = enemy.x - currentTarget.x;
+                const dy = enemy.y - currentTarget.y;
+                const distSq = dx * dx + dy * dy;
+
+                // Check if target is close enough and closer than other candidates
+                if (distSq <= maxJumpDistance * maxJumpDistance && distSq < closestDist) {
+                    closestDist = distSq;
+                    nextTarget = enemy;
+                }
+            }
+
+            // Update parameters for the next chain jump
+            currentSource = currentTarget;
+            currentTarget = nextTarget;
+        }
+    }
+
+    /**
+     * _drawLightningBolt — Draws a jagged electrical bolt from (x1, y1) to (x2, y2).
+     * 
+     * Purpose:
+     * Generates a realistic electric spark by dividing the distance between points into
+     * small segments, offsetting the intermediate points perpendicularly by a random amount,
+     * and drawing line segments connecting them.
+     *
+     * @param {number} x1 - Source X
+     * @param {number} y1 - Source Y
+     * @param {number} x2 - Destination X
+     * @param {number} y2 - Destination Y
+     * @private
+     */
+    _drawLightningBolt(x1, y1, x2, y2) {
+        const bolt = this.scene.add.graphics();
+        bolt.lineStyle(2.5, 0xf1c40f, 1.0); // Bright electrical yellow
+        bolt.beginPath();
+        bolt.moveTo(x1, y1);
+
+        const dx = x2 - x1;
+        const dy = x2 - x1; // wait, let's make sure this is dy = y2 - y1!
+        const correctDy = y2 - y1;
+        const dist = Math.sqrt(dx * dx + correctDy * correctDy);
+        
+        // Divide the line into 20px long segments
+        const segments = Math.max(3, Math.floor(dist / 20));
+
+        for (let i = 1; i < segments; i++) {
+            const fraction = i / segments;
+            // Linear interpolation (lerp) coordinates along the straight line
+            const px = x1 + dx * fraction;
+            const py = y1 + correctDy * fraction;
+
+            // Perpendicular offset for electrical jagging
+            // SYNTAX BREAKDOWN:
+            // - `(Math.random() - 0.5) * 16` gives a random number between -8 and +8.
+            // - `perpX` and `perpY` represent the perpendicular direction (normal vector) to the line.
+            const offset = (Math.random() - 0.5) * 16;
+            const perpX = -correctDy / dist;
+            const perpY = dx / dist;
+
+            bolt.lineTo(px + perpX * offset, py + perpY * offset);
+        }
+
+        // Finish at the destination
+        bolt.lineTo(x2, y2);
+        bolt.strokePath();
+
+        // Fade away and destroy the graphics object to avoid memory leaks.
+        this.scene.tweens.add({
+            targets: bolt,
+            alpha: 0,
+            duration: 150,
+            onComplete: () => bolt.destroy()
+        });
+    }
+
+    /**
+     * recalculateBuffs — Recalculates Buffer/Booster tower damage multipliers for surrounding towers.
+     * 
+     * Purpose:
+     * Scans the grid. Resets all towers to their base damage stats (including upgrade stats),
+     * finds all Buffer/Booster towers, and applies a damage multiplier to all towers situated
+     * in their immediate 3x3 surrounding tiles.
+     */
+    recalculateBuffs() {
+        // Step 1: Reset all towers back to their base stats (clean data before applying buffs)
+        // WHY? If we sold a buffer or moved a tower away, we need to clear the old buffs first,
+        // otherwise towers would stack buffs permanently or keep buffs they shouldn't have.
+        for (const tower of this.towers) {
+            const def = GAME_CONFIG.towers[tower.type];
+            let baseDamage = def.damage;
+            let baseRange = def.range;
+            
+            // Re-apply upgrade stats based on current tier level
+            for (let i = 0; i < tower.level; i++) {
+                baseDamage = def.upgrades[i].damage ?? baseDamage;
+                baseRange = def.upgrades[i].range ?? baseRange;
+            }
+            
+            tower.damage = baseDamage;
+            tower.range = baseRange;
+        }
+
+        // Step 2: Find all active Buffer towers
+        const buffers = this.towers.filter(t => t.type === 'booster');
+
+        // Step 3: For each Buffer tower, apply its damage multiplier to adjacent towers
+        for (const buffer of buffers) {
+            const def = GAME_CONFIG.towers.booster;
+            let multiplier = def.buffMultiplier;
+            
+            // Sum upgrade multiplier if the Buffer tower is upgraded
+            for (let i = 0; i < buffer.level; i++) {
+                multiplier = def.upgrades[i].buffMultiplier ?? multiplier;
+            }
+
+            // Loop through all placed towers to find targets within the 3x3 surrounding area
+            for (const target of this.towers) {
+                if (target === buffer) continue; // A Buffer cannot buff itself!
+
+                // Calculate distance in grid coordinates
+                const colDiff = Math.abs(target.col - buffer.col);
+                const rowDiff = Math.abs(target.row - buffer.row);
+
+                // If within 1 tile grid distance in both directions (immediate neighbors on 3x3 grid)
+                if (colDiff <= 1 && rowDiff <= 1) {
+                    // Multiply target damage and round to avoid fractional numbers.
+                    target.damage = Math.round(target.damage * multiplier);
+                }
+            }
+        }
     }
 }
 

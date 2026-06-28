@@ -49,7 +49,10 @@ const GAME_CONFIG = {
     towers: {
         basic: {
             name: 'Blaster',
+            description: 'Shoots quick plasma bolts. Good starting option.',
             cost: 25,
+            tier: 1,
+            unlockWave: 0,
             range: 3,          // tiles
             damage: 10,
             fireRate: 1.5,     // shots per second
@@ -62,12 +65,15 @@ const GAME_CONFIG = {
         },
         splash: {
             name: 'Cannon',
+            description: 'Fires slow explosive shells. Deals area damage.',
             cost: 50,
+            tier: 1,
+            unlockWave: 0,
             range: 2.5,
             damage: 20,
             fireRate: 0.8,
             color: 0xff6b6b,   // coral red
-            splashRadius: 1.5, // tiles — hits all enemies in this radius
+            splashRadius: 1.5, // tiles
             upgrades: [
                 { cost: 35, damage: 30, splashRadius: 2   },
                 { cost: 60, damage: 50, splashRadius: 2.5 },
@@ -75,7 +81,10 @@ const GAME_CONFIG = {
         },
         sniper: {
             name: 'Sniper',
+            description: 'Extreme range and massive damage, but slow reload.',
             cost: 75,
+            tier: 1,
+            unlockWave: 0,
             range: 6,
             damage: 50,
             fireRate: 0.4,
@@ -84,6 +93,125 @@ const GAME_CONFIG = {
             upgrades: [
                 { cost: 50, damage: 80, range: 7 },
                 { cost: 80, damage: 120, range: 8 },
+            ],
+        },
+        slower: {
+            name: 'Frost',
+            description: 'Zero damage. Emits frost beams that slow targets by 50%.',
+            cost: 60,
+            tier: 2,
+            unlockWave: 2,
+            range: 2,
+            damage: 0,
+            fireRate: 1.0,
+            color: 0x3498db,   // ice blue
+            splashRadius: 0,
+            slowMultiplier: 0.5, // 50% speed reduction
+            slowDuration: 2.0,   // 2 seconds slow duration
+            upgrades: [
+                { cost: 40, range: 2.5, slowMultiplier: 0.4 }, // slow by 60%
+                { cost: 60, range: 3.0, slowMultiplier: 0.3 }, // slow by 70%
+            ],
+        },
+        poisoner: {
+            name: 'Acid Spitter',
+            description: 'Infects targets with acid, dealing damage over time.',
+            cost: 80,
+            tier: 2,
+            unlockWave: 2,
+            range: 3.5,
+            damage: 5,         // Initial hit damage
+            fireRate: 1.0,
+            color: 0x2ecc71,   // green
+            splashRadius: 0,
+            poisonDamage: 8,     // Damage per tick
+            poisonDuration: 4.0, // Deals damage over 4 seconds
+            upgrades: [
+                { cost: 50, damage: 8, poisonDamage: 15 },
+                { cost: 75, damage: 12, poisonDamage: 25 },
+            ],
+        },
+        laser: {
+            name: 'Laser Beam',
+            description: 'Continuously melts targets with rapid low-damage energy ticks.',
+            cost: 100,
+            tier: 2,
+            unlockWave: 2,
+            range: 2.5,
+            damage: 2,
+            fireRate: 10.0,    // 10 shots per second!
+            color: 0x9b59b6,   // purple
+            splashRadius: 0,
+            upgrades: [
+                { cost: 60, damage: 4, range: 3.0 },
+                { cost: 90, damage: 8, range: 3.5 },
+            ],
+        },
+        booster: {
+            name: 'Buffer',
+            description: 'Zero damage. Boosts damage of adjacent towers by 25%.',
+            cost: 120,
+            tier: 3,
+            unlockWave: 5,
+            range: 1.5,        // Enough to touch surrounding tiles
+            damage: 0,
+            fireRate: 0,
+            color: 0xe67e22,   // orange
+            splashRadius: 0,
+            buffMultiplier: 1.25, // 25% damage boost
+            upgrades: [
+                { cost: 80, buffMultiplier: 1.40 }, // 40% buff
+                { cost: 120, buffMultiplier: 1.60 }, // 60% buff
+            ],
+        },
+        tesla: {
+            name: 'Tesla Coil',
+            description: 'Shoots lightning bolts that chain to up to 3 nearby targets.',
+            cost: 150,
+            tier: 3,
+            unlockWave: 5,
+            range: 3,
+            damage: 25,
+            fireRate: 0.8,
+            color: 0xf1c40f,   // bright yellow
+            splashRadius: 0,
+            chainTargets: 3,   // Hits primary + 2 chains
+            upgrades: [
+                { cost: 100, damage: 40, chainTargets: 4 },
+                { cost: 150, damage: 70, chainTargets: 5 },
+            ],
+        },
+        miner: {
+            name: 'Gold Miner',
+            description: 'Zero damage. Generates 40 bonus gold at the end of each wave.',
+            cost: 180,
+            tier: 3,
+            unlockWave: 5,
+            range: 0,          // Does not shoot
+            damage: 0,
+            fireRate: 0,
+            color: 0x1abc9c,   // turquoise
+            splashRadius: 0,
+            goldGeneration: 40,
+            upgrades: [
+                { cost: 120, goldGeneration: 80 },
+                { cost: 180, goldGeneration: 140 },
+            ],
+        },
+        doomray: {
+            name: 'Doom Ray',
+            description: 'Near-global range, massive damage, but extremely slow reload.',
+            cost: 300,
+            tier: 3,
+            unlockWave: 5,
+            range: 12,
+            damage: 200,
+            fireRate: 0.1,     // Fires once every 10 seconds!
+            color: 0xe74c3c,   // crimson red
+            splashRadius: 0,
+            upgrades: [
+                { cost: 200, damage: 450, fireRate: 0.12 },
+                { cost: 300, damage: 900, fireRate: 0.15 },
             ],
         },
     },

@@ -109,6 +109,11 @@ class WaveManager {
         const activeEnemies = this.enemyManager.getActiveEnemies();
         if (activeEnemies.length === 0) {
             this.waveActive = false;
+            
+            // Emit a wave complete event so the game scene knows the wave is over.
+            // WHY? This tells TDScene to trigger end-of-wave payouts (like Gold Miner generation).
+            scene.events.emit('wave-complete');
+
             /* Remove the repeating check timer */
             this.spawnTimers.forEach(t => {
                 if (t.loop) t.remove();

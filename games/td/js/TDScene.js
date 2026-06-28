@@ -72,6 +72,9 @@ class TDScene extends Phaser.Scene {
         this.hud.setGold(this.gold);
         this.hud.setLives(this.lives);
         this.hud.setWave(0, this.waveManager.totalWaves);
+        
+        // Check and apply initial locks/unlocks for Wave 0
+        this.hud.updateUnlockStates(0);
 
         /* --- Calculate Initial Path ---
            Enemies need a path before the first wave can spawn. */
@@ -84,7 +87,56 @@ class TDScene extends Phaser.Scene {
             const result = this.waveManager.startNextWave(this);
             if (result.started) {
                 this.hud.setWave(result.waveNumber, this.waveManager.totalWaves);
+                
+                // Update unlock states based on the wave that just started
+                // WHY? High-tier towers unlock dynamically after the player survives to specific waves.
+                this.hud.updateUnlockStates(result.waveNumber);
             }
+        });
+
+        /* --- Wave Complete Event Handler ---
+           WHY? When a wave ends, Gold Miner towers generate gold. We listen for this event,
+           scan the map for miners, add the gold, and play a visual text popup animation. */
+        this.events.on('wave-complete', () => {
+            // Find all active Gold Miner towers placed on the map
+            // SYNTAX BREAKDOWN:
+            // - Array.prototype.filter() returns a new array containing only elements that match the condition.
+            const miners = this.towerManager.towers.filter(t => t.type === 'miner');
+
+            miners.forEach(miner => {
+                const def = GAME_CONFIG.towers.miner;
+                let reward = def.goldGeneration;
+
+                // Adjust reward based on upgrade level if the miner has been upgraded
+                for (let i = 0; i < miner.level; i++) {
+                    reward = def.upgrades[i].goldGeneration ?? reward;
+                }
+
+                // Add gold and update display
+                this.gold += reward;
+                this.hud.setGold(this.gold);
+
+                // Get pixel coordinates of the tower
+                const pos = this.gridSystem.tileToPixel(miner.col, miner.row);
+
+                // Create floating green text above the miner tower (+Gold!)
+                // WHY? Visual feedback makes game accomplishments feel rewarding.
+                const popText = this.add.text(pos.x, pos.y - 20, `+$${reward}`, {
+                    fontFamily: 'Outfit',
+                    fontSize: '14px',
+                    fontStyle: 'bold',
+                    color: '#1abc9c'
+                }).setOrigin(0.5);
+
+                // Animate the text floating upwards and fading away
+                this.tweens.add({
+                    targets: popText,
+                    y: pos.y - 45,       // Move 25 pixels higher
+                    alpha: 0,            // Fade to completely transparent
+                    duration: 1200,      // Animation runs for 1.2 seconds (1200ms)
+                    onComplete: () => popText.destroy() // Destroy object from memory when done
+                });
+            });
         });
 
         /* --- Track Mouse Movement for Range Visualization ---
