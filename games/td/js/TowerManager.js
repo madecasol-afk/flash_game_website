@@ -194,8 +194,8 @@ class TowerManager {
                WHY "closest"? This is the simplest targeting strategy and
                matches what most classic TD games use. Later we can add
                "first" (closest to exit) or "strongest" targeting modes. */
-            let closestEnemy = null;
-            let closestDist = Infinity;
+            let targetEnemy = null;
+            let bestValue = tower.type === 'doomray' ? -1 : Infinity;
 
             for (const enemy of enemies) {
                 if (!enemy.active) continue; // Skip dead enemies
@@ -206,15 +206,26 @@ class TowerManager {
                    and gives the same ordering. Classic game dev optimisation. */
                 const distSq = dx * dx + dy * dy;
 
-                if (distSq <= rangePixels * rangePixels && distSq < closestDist) {
-                    closestDist = distSq;
-                    closestEnemy = enemy;
+                if (distSq <= rangePixels * rangePixels) {
+                    if (tower.type === 'doomray') {
+                        // Strongest targeting: Pick the enemy with the most maximum health
+                        if (enemy.maxHp > bestValue) {
+                            bestValue = enemy.maxHp;
+                            targetEnemy = enemy;
+                        }
+                    } else {
+                        // Closest targeting: Pick the enemy physically closest to the tower
+                        if (distSq < bestValue) {
+                            bestValue = distSq;
+                            targetEnemy = enemy;
+                        }
+                    }
                 }
             }
 
-            if (closestEnemy) {
+            if (targetEnemy) {
                 tower.lastFired = time;
-                this._fireAt(tower, closestEnemy, towerPos, enemies);
+                this._fireAt(tower, targetEnemy, towerPos, enemies);
             }
         }
     }
