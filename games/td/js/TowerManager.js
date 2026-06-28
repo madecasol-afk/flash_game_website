@@ -202,99 +202,231 @@ class TowerManager {
      */
     _fireAt(tower, target, towerPos, enemies) {
         // --- Tesla Coil Special Case: Chain Lightning ---
-        // WHY? Tesla lightning jumps between multiple enemies in a jagged electrical path, which requires custom recursive logic.
         if (tower.type === 'tesla') {
             this._fireChainLightning(tower, target, towerPos, enemies);
             return;
         }
 
-        const tileSize = this.gridSystem.tileSize;
-
-        // Customise projectile line styles based on the tower type.
-        // WHY? Color-coded lasers instantly tell the player which tower is hitting which enemy.
-        let beamColor = 0xffffff; // Default white
-        let beamWidth = 2;        // Default 2px
-        
-        switch (tower.type) {
-            case 'slower':
-                beamColor = 0x3498db; // Ice blue
-                break;
-            case 'poisoner':
-                beamColor = 0x2ecc71; // Acid green
-                break;
-            case 'laser':
-                beamColor = 0x9b59b6; // Rapid purple
-                beamWidth = 1.5;
-                break;
-            case 'doomray':
-                beamColor = 0xe74c3c; // Thick crimson red
-                beamWidth = 4;
-                break;
-        }
-
-        /* Draw a quick projectile line from tower to enemy. */
-        const line = this.scene.add.graphics();
-        line.lineStyle(beamWidth, beamColor, 0.8);
-        line.beginPath();
-        line.moveTo(towerPos.x, towerPos.y);
-        line.lineTo(target.x, target.y);
-        line.strokePath();
-
-        /* Fade and remove the projectile line after 100ms. */
-        this.scene.tweens.add({
-            targets: line,
-            alpha: 0,
-            duration: 100,
-            onComplete: () => line.destroy(),
-        });
-
-        // --- Apply Damage and Effects ---
-        
-        // Apply Special Status Effects based on tower type:
-        if (tower.type === 'slower') {
-            // Frost Slow Effect: Reduces enemy speed.
-            const def = GAME_CONFIG.towers.slower;
-            let mult = def.slowMultiplier;
-            let dur = def.slowDuration;
-            
-            // Read upgrades if upgraded
-            for (let i = 0; i < tower.level; i++) {
-                mult = def.upgrades[i].slowMultiplier ?? mult;
-                dur = def.upgrades[i].range ?? dur; // wait, let's keep dur constant or scale
-            }
-            
-            target.takeSlow(mult, dur);
-        }
-        else if (tower.type === 'poisoner') {
-            // Acid Poison DOT Effect: Deals damage over time.
-            const def = GAME_CONFIG.towers.poisoner;
-            let tickDmg = def.poisonDamage;
-            let dur = def.poisonDuration;
-            
-            for (let i = 0; i < tower.level; i++) {
-                tickDmg = def.upgrades[i].poisonDamage ?? tickDmg;
-            }
-            
-            target.takePoison(tickDmg, dur);
-        }
-
-        // Apply normal hit damage
-        if (tower.damage > 0) {
-            if (tower.splashRadius > 0) {
-                /* Splash towers damage ALL enemies within the splash radius. */
-                const splashPixels = tower.splashRadius * tileSize;
-                for (const enemy of enemies) {
-                    if (!enemy.active) continue;
-                    const dx = enemy.x - target.x;
-                    const dy = enemy.y - target.y;
-                    if (dx * dx + dy * dy <= splashPixels * splashPixels) {
-                        enemy.takeDamage(tower.damage);
-                    }
+        const applyDamage = () => {
+            // Apply Special Status Effects based on tower type:
+            if (tower.type === 'slower') {
+                const def = GAME_CONFIG.towers.slower;
+                let mult = def.slowMultiplier;
+                let dur = def.slowDuration;
+                for (let i = 0; i < tower.level; i++) {
+                    mult = def.upgrades[i].slowMultiplier ?? mult;
                 }
-            } else {
-                /* Single-target towers only hit the one enemy */
-                target.takeDamage(tower.damage);
+                if (target.active) target.takeSlow(mult, dur);
             }
+            else if (tower.type === 'poisoner') {
+                const def = GAME_CONFIG.towers.poisoner;
+                let tickDmg = def.poisonDamage;
+                let dur = def.poisonDuration;
+                for (let i = 0; i < tower.level; i++) {
+                    tickDmg = def.upgrades[i].poisonDamage ?? tickDmg;
+                }
+                if (target.active) target.takePoison(tickDmg, dur);
+            }
+
+            // Apply normal hit damage
+            if (tower.damage > 0) {
+                if (tower.splashRadius > 0) {
+                    /* Splash towers damage ALL enemies within the splash radius. */
+                    const splashPixels = tower.splashRadius * this.gridSystem.tileSize;
+                    for (const enemy of enemies) {
+                        if (!enemy.active) continue;
+                        const dx = enemy.x - target.x;
+                        const dy = enemy.y - target.y;
+                        if (dx * dx + dy * dy <= splashPixels * splashPixels) {
+                            enemy.takeDamage(tower.damage);
+                        }
+                    }
+                    // Visual explosion for splash
+                    this._playExplosion(target.x, target.y, splashPixels);
+                } else {
+                    /* Single-target towers only hit the one enemy */
+                    if (target.active) target.takeDamage(tower.damage);
+                }
+            }
+        };
+
+        // Trigger the visual attack animation (which handles calling applyDamage upon impact)
+        this._playAttackAnimation(tower, target, towerPos, applyDamage);
+    }
+
+    _playExplosion(x, y, radius) {
+        const circle = this.scene.add.graphics();
+        circle.fillStyle(0xff6b6b, 0.8);
+        circle.fillCircle(0, 0, radius * 0.2); // Start small
+        circle.setPosition(x, y);
+        
+        this.scene.tweens.add({
+            targets: circle,
+            scaleX: 5, // Scale up to full radius
+            scaleY: 5,
+            alpha: 0,
+            duration: 300,
+            ease: 'Cubic.easeOut',
+            onComplete: () => circle.destroy()
+        });
+    }
+
+    _playAttackAnimation(tower, target, towerPos, onHitCallback) {
+        const scene = this.scene;
+        const type = tower.type;
+        
+        if (type === 'basic' || type === 'poisoner') {
+            // Projectile
+            const isAcid = type === 'poisoner';
+            const proj = scene.add.graphics();
+            proj.fillStyle(isAcid ? 0x2ecc71 : 0x4ecdc4, 1);
+            proj.fillCircle(0, 0, isAcid ? 4 : 3);
+            proj.setPosition(towerPos.x, towerPos.y);
+            
+            // Calculate travel time based on distance (speed = 500px/s)
+            const dist = Phaser.Math.Distance.Between(towerPos.x, towerPos.y, target.x, target.y);
+            const duration = (dist / 500) * 1000;
+            
+            scene.tweens.add({
+                targets: proj,
+                x: target.x,
+                y: target.y,
+                duration: duration,
+                onComplete: () => {
+                    proj.destroy();
+                    // Optional splash effect for acid
+                    if (isAcid) {
+                        const splat = scene.add.graphics();
+                        splat.fillStyle(0x2ecc71, 0.6);
+                        splat.fillCircle(0, 0, 8);
+                        splat.setPosition(target.x, target.y);
+                        scene.tweens.add({
+                            targets: splat, alpha: 0, scale: 1.5, duration: 200, onComplete: () => splat.destroy()
+                        });
+                    }
+                    onHitCallback();
+                }
+            });
+        }
+        else if (type === 'splash') {
+            // Arcing bomb
+            const proj = scene.add.graphics();
+            proj.fillStyle(0x444444, 1);
+            proj.fillCircle(0, 0, 5);
+            proj.setPosition(towerPos.x, towerPos.y);
+            
+            const dist = Phaser.Math.Distance.Between(towerPos.x, towerPos.y, target.x, target.y);
+            const duration = (dist / 300) * 1000;
+            
+            // X/Y tween
+            scene.tweens.add({
+                targets: proj,
+                x: target.x,
+                y: target.y,
+                duration: duration,
+                ease: 'Linear',
+                onComplete: () => {
+                    proj.destroy();
+                    onHitCallback();
+                }
+            });
+            // Arc scale tween (grows and shrinks to simulate Z height trajectory)
+            scene.tweens.add({
+                targets: proj,
+                scaleX: 2.5, scaleY: 2.5,
+                duration: duration / 2,
+                yoyo: true,
+                ease: 'Sine.easeInOut'
+            });
+        }
+        else if (type === 'sniper') {
+            // Hitscan instantaneous thin beam
+            const line = scene.add.graphics();
+            line.lineStyle(1, 0xffd93d, 1);
+            line.beginPath();
+            line.moveTo(towerPos.x, towerPos.y);
+            line.lineTo(target.x, target.y);
+            line.strokePath();
+            
+            // Hit spark
+            const spark = scene.add.graphics();
+            spark.fillStyle(0xffffff, 1);
+            spark.fillCircle(target.x, target.y, 4);
+            
+            scene.tweens.add({
+                targets: [line, spark],
+                alpha: 0,
+                duration: 100,
+                onComplete: () => { line.destroy(); spark.destroy(); }
+            });
+            onHitCallback(); // Instant hit
+        }
+        else if (type === 'slower') {
+            // Frost beam (fading line)
+            const line = scene.add.graphics();
+            line.lineStyle(3, 0x3498db, 0.6);
+            line.beginPath();
+            line.moveTo(towerPos.x, towerPos.y);
+            line.lineTo(target.x, target.y);
+            line.strokePath();
+            
+            scene.tweens.add({
+                targets: line,
+                alpha: 0,
+                duration: 200,
+                onComplete: () => line.destroy()
+            });
+            
+            // Frost aura on target
+            const aura = scene.add.graphics();
+            aura.lineStyle(2, 0x3498db, 0.8);
+            aura.strokeCircle(target.x, target.y, 10);
+            scene.tweens.add({
+                targets: aura, scale: 1.5, alpha: 0, duration: 300, onComplete: () => aura.destroy()
+            });
+            onHitCallback(); // Instant hit
+        }
+        else if (type === 'laser') {
+            // Solid continuous laser (since fire rate is high, it redraws often)
+            const line = scene.add.graphics();
+            line.lineStyle(2, 0x9b59b6, 0.9);
+            line.beginPath();
+            line.moveTo(towerPos.x, towerPos.y);
+            line.lineTo(target.x, target.y);
+            line.strokePath();
+            
+            scene.tweens.add({
+                targets: line,
+                alpha: 0,
+                duration: 100, // Very short since it fires 10x per sec
+                onComplete: () => line.destroy()
+            });
+            onHitCallback(); // Instant hit
+        }
+        else if (type === 'doomray') {
+            // Doomray screen shake & massive beam
+            scene.cameras.main.shake(300, 0.015);
+            
+            // Outer glow
+            const glow = scene.add.graphics();
+            glow.lineStyle(12, 0xff0000, 0.3);
+            glow.beginPath(); glow.moveTo(towerPos.x, towerPos.y); glow.lineTo(target.x, target.y); glow.strokePath();
+            
+            // Inner core
+            const core = scene.add.graphics();
+            core.lineStyle(4, 0xffffff, 1);
+            core.beginPath(); core.moveTo(towerPos.x, towerPos.y); core.lineTo(target.x, target.y); core.strokePath();
+            
+            scene.tweens.add({
+                targets: [glow, core],
+                alpha: 0,
+                duration: 400,
+                ease: 'Expo.easeOut',
+                onComplete: () => { glow.destroy(); core.destroy(); }
+            });
+            
+            // Massive explosion handled by applyDamage directly via splash logic
+            onHitCallback(); // Instant hit
         }
     }
 
