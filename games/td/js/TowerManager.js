@@ -114,14 +114,27 @@ class TowerManager {
 
         /* Store the tower data */
         const tower = {
-            col,
-            row,
             type: this.selectedType,
-            level: 0,
+            col, row,
+            x: pos.x, y: pos.y,
+            damageLevel: 0,
+            speedLevel: 0,
+            rangeLevel: 0,
+            damageSpent: 0,
+            speedSpent: 0,
+            rangeSpent: 0,
+            baseDamage: towerDef.damage,
             damage: towerDef.damage,
+            baseRange: towerDef.range,
             range: towerDef.range,
+            baseFireRate: towerDef.fireRate,
             fireRate: towerDef.fireRate,
             splashRadius: towerDef.splashRadius,
+            goldGeneration: towerDef.goldGeneration,
+            buffMultiplier: towerDef.buffMultiplier,
+            slowMultiplier: towerDef.slowMultiplier,
+            poisonDamage: towerDef.poisonDamage,
+            chainTargets: towerDef.chainTargets,
             lastFired: 0,
             graphics: container,
         };
@@ -213,20 +226,14 @@ class TowerManager {
             // Apply Special Status Effects based on tower type:
             if (tower.type === 'slower') {
                 const def = GAME_CONFIG.towers.slower;
-                let mult = def.slowMultiplier;
+                let mult = tower.slowMultiplier || def.slowMultiplier;
                 let dur = def.slowDuration;
-                for (let i = 0; i < tower.level; i++) {
-                    mult = def.upgrades[i].slowMultiplier ?? mult;
-                }
                 if (target.active) target.takeSlow(mult, dur);
             }
             else if (tower.type === 'poisoner') {
                 const def = GAME_CONFIG.towers.poisoner;
-                let tickDmg = def.poisonDamage;
+                let tickDmg = tower.poisonDamage || def.poisonDamage;
                 let dur = def.poisonDuration;
-                for (let i = 0; i < tower.level; i++) {
-                    tickDmg = def.upgrades[i].poisonDamage ?? tickDmg;
-                }
                 if (target.active) target.takePoison(tickDmg, dur);
             }
 
@@ -484,15 +491,7 @@ class TowerManager {
         // they could dynamically move their entire defense instantly with zero strategic penalty.
         // A 30% loss forces players to plan their layout more carefully.
         const baseRefundRatio = 0.7;
-        let totalCost = towerDef.cost;
-
-        // If the tower has been upgraded, add the upgrade costs to the total calculation.
-        // SYNTAX BREAKDOWN:
-        // - `tower.level` tracks how many upgrades have been applied (0 = base, 1 = first upgrade, etc.).
-        // - We loop from `i = 0` up to `tower.level - 1` to sum the cost of each upgrade applied.
-        for (let i = 0; i < tower.level; i++) {
-            totalCost += towerDef.upgrades[i].cost;
-        }
+        const totalCost = towerDef.cost + tower.damageSpent + tower.speedSpent + tower.rangeSpent;
 
         // Round to avoid fractional gold values (e.g., 17.5 gold).
         const refundAmount = Math.round(totalCost * baseRefundRatio);
@@ -607,6 +606,8 @@ class TowerManager {
 
         // Snap the graphics object to the center of the new tile.
         this.movingTower.graphics.setPosition(pos.x, pos.y);
+        this.movingTower.x = pos.x;
+        this.movingTower.y = pos.y;
 
         // Restore the full opacity of the tower graphics.
         this.movingTower.graphics.setAlpha(1.0);
@@ -665,12 +666,7 @@ class TowerManager {
     _fireChainLightning(tower, target, towerPos, enemies) {
         if (this.scene.soundSystem) this.scene.soundSystem.playTesla();
         const def = GAME_CONFIG.towers.tesla;
-        let chainTargets = def.chainTargets;
-
-        // Sum upgrades if any
-        for (let i = 0; i < tower.level; i++) {
-            chainTargets = def.upgrades[i].chainTargets;
-        }
+        let chainTargets = tower.chainTargets || def.chainTargets;
 
         // Keep track of enemies already hit to prevent the lightning from bouncing back and forth
         // between the same two enemies.
@@ -736,7 +732,6 @@ class TowerManager {
         bolt.moveTo(x1, y1);
 
         const dx = x2 - x1;
-        const dy = x2 - x1; // wait, let's make sure this is dy = y2 - y1!
         const correctDy = y2 - y1;
         const dist = Math.sqrt(dx * dx + correctDy * correctDy);
         
@@ -782,49 +777,24 @@ class TowerManager {
      * in their immediate 3x3 surrounding tiles.
      */
     recalculateBuffs() {
-        // Step 1: Reset all towers back to their base stats (clean data before applying buffs)
-        // WHY? If we sold a buffer or moved a tower away, we need to clear the old buffs first,
-        // otherwise towers would stack buffs permanently or keep buffs they shouldn't have.
+        // 1. Reset all towers to their base calculated stats
         for (const tower of this.towers) {
-            const def = GAME_CONFIG.towers[tower.type];
-            let baseDamage = def.damage;
-            let baseRange = def.range;
-            
-            // Re-apply upgrade stats based on current tier level
-            for (let i = 0; i < tower.level; i++) {
-                baseDamage = def.upgrades[i].damage ?? baseDamage;
-                baseRange = def.upgrades[i].range ?? baseRange;
-            }
-            
-            tower.damage = baseDamage;
-            tower.range = baseRange;
+            tower.damage = tower.baseDamage;
         }
 
-        // Step 2: Find all active Buffer towers
-        const buffers = this.towers.filter(t => t.type === 'booster');
-
-        // Step 3: For each Buffer tower, apply its damage multiplier to adjacent towers
-        for (const buffer of buffers) {
-            const def = GAME_CONFIG.towers.booster;
-            let multiplier = def.buffMultiplier;
-            
-            // Sum upgrade multiplier if the Buffer tower is upgraded
-            for (let i = 0; i < buffer.level; i++) {
-                multiplier = def.upgrades[i].buffMultiplier ?? multiplier;
-            }
-
-            // Loop through all placed towers to find targets within the 3x3 surrounding area
-            for (const target of this.towers) {
-                if (target === buffer) continue; // A Buffer cannot buff itself!
-
-                // Calculate distance in grid coordinates
-                const colDiff = Math.abs(target.col - buffer.col);
-                const rowDiff = Math.abs(target.row - buffer.row);
-
-                // If within 1 tile grid distance in both directions (immediate neighbors on 3x3 grid)
-                if (colDiff <= 1 && rowDiff <= 1) {
-                    // Multiply target damage and round to avoid fractional numbers.
-                    target.damage = Math.round(target.damage * multiplier);
+        // 2. Apply buffs from 'booster' towers
+        for (const buffer of this.towers) {
+            if (buffer.type === 'booster') {
+                const multiplier = buffer.buffMultiplier;
+                
+                // Find all adjacent towers
+                for (const target of this.towers) {
+                    if (target === buffer) continue;
+                    
+                    const dist = Phaser.Math.Distance.Between(buffer.x, buffer.y, target.x, target.y);
+                    if (dist <= buffer.range * this.gridSystem.tileSize) {
+                        target.damage *= multiplier;
+                    }
                 }
             }
         }
@@ -841,24 +811,25 @@ class TowerManager {
      */
     redrawTower(tower) {
         const gfx = tower.graphics.overlayGfx;
-        
-        // Clear all previous lines and shapes drawn on this graphics container.
-        // WHY? Phaser keeps drawings in a buffer. If we don't call clear(), the new drawings
-        // will overlap on top of the old ones, wasting rendering performance and looking messy.
         gfx.clear();
 
-        // 3. Upgrade level indicator dots
-        // We draw tiny golden circles in the center of the tower.
-        // - Level 1 (First Upgrade): One central dot.
-        // - Level 2 (Second/Max Upgrade): Two side-by-side dots.
-        // WHY? Visual progression keeps the player engaged and makes it easy to spot fully-upgraded towers at a glance.
-        gfx.fillStyle(0xffd93d, 1); // Gold color
-        if (tower.level === 1) {
-            gfx.fillCircle(0, 0, 4); // 1 dot in the middle
-        } else if (tower.level === 2) {
-            gfx.fillCircle(-8, 0, 4); // 2 dots side by side
-            gfx.fillCircle(8, 0, 4);
+        const maxLevel = Math.max(tower.damageLevel, tower.speedLevel, tower.rangeLevel);
+        
+        // Draw a visual indicator for high level towers
+        if (maxLevel > 0) {
+            gfx.fillStyle(0xffd700, 1);
+            
+            if (maxLevel < 5) {
+                // Draw dots for early levels
+                for (let i = 0; i < maxLevel; i++) {
+                    gfx.fillCircle(-10 + (i * 10), -12, 3);
+                }
+            } else {
+                // Draw a golden star for highly upgraded towers (simplified as a larger circle with outline)
+                gfx.lineStyle(2, 0xffffff, 1);
+                gfx.fillCircle(0, -12, 6);
+                gfx.strokeCircle(0, -12, 6);
+            }
         }
     }
 }
-

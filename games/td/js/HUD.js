@@ -245,8 +245,6 @@ class HUD {
         const titleEl = this.inspectorEl.querySelector('.inspector-title');
         const descEl = this.inspectorEl.querySelector('.inspector-desc');
         
-        // Clear any existing stats and action buttons inside the inspector pane.
-        // WHY? If we don't clear them, they will keep stacking up every time you click a tower.
         const existingStats = this.inspectorEl.querySelector('.inspector-stats');
         if (existingStats) existingStats.remove();
         
@@ -256,82 +254,87 @@ class HUD {
         const def = GAME_CONFIG.towers[tower.type];
         if (!def) return;
 
-        // Set the header to show the name and level (1-indexed for display: e.g. Lv. 1 instead of level 0)
-        titleEl.textContent = `${def.name} (Lv. ${tower.level + 1})`;
+        // Calculate max level among all stats to show a unified "Level" in the title
+        const maxLevel = Math.max(tower.damageLevel, tower.speedLevel, tower.rangeLevel);
+        titleEl.textContent = `${def.name} (Lv. ${maxLevel + 1})`;
         
-        // Read next upgrade details if available
-        const hasUpgrade = tower.level < def.upgrades.length;
-        if (hasUpgrade) {
-            const nextUpgrade = def.upgrades[tower.level];
-            descEl.textContent = `Next Upgrade: Cost: ${nextUpgrade.cost}g. `;
-            if (nextUpgrade.damage) descEl.textContent += `⚔️ Dmg +${nextUpgrade.damage - tower.damage}. `;
-            if (nextUpgrade.range) descEl.textContent += `🎯 Rng +${nextUpgrade.range - tower.range}. `;
-        } else {
-            descEl.textContent = 'Maximum upgrade level reached.';
-        }
+        descEl.textContent = 'Upgrade individual stats to scale indefinitely.';
 
         // Current Stats Row
         const statsEl = document.createElement('div');
         statsEl.className = 'inspector-stats';
         
-        const dmgText = tower.damage > 0 ? `${tower.damage}` : 'N/A';
-        const rangeText = `${tower.range} tiles`;
-        const speedText = tower.fireRate > 0 ? `${tower.fireRate}/s` : 'N/A';
+        let dmgText = tower.damage > 0 ? `${Math.round(tower.damage)}` : 'N/A';
+        // Handle special stats for non-damage towers
+        if (def.goldGeneration) dmgText = `+${Math.round(tower.goldGeneration)}g`;
+        else if (def.buffMultiplier) dmgText = `x${tower.buffMultiplier.toFixed(2)}`;
+        else if (def.slowMultiplier) dmgText = `x${tower.slowMultiplier.toFixed(2)} spd`;
+        
+        const rangeText = `${tower.range.toFixed(1)} tiles`;
+        const speedText = tower.fireRate > 0 ? `${tower.fireRate.toFixed(1)}/s` : 'N/A';
 
         statsEl.innerHTML = `
-            <span>⚔️ Dmg: ${dmgText}</span>
+            <span>⚔️ Pwr: ${dmgText}</span>
             <span>🎯 Rng: ${rangeText}</span>
             <span>⚡ Spd: ${speedText}</span>
         `;
         this.inspectorEl.appendChild(statsEl);
 
-        // Action Buttons Row (Upgrade & Sell)
-        // WHY HTML buttons? They are easier to click, style, and wire up than drawing custom buttons
-        // directly inside the Phaser canvas rendering loop.
         const actionsEl = document.createElement('div');
         actionsEl.className = 'inspector-actions';
+        actionsEl.style.display = 'flex';
+        actionsEl.style.flexDirection = 'column';
+        actionsEl.style.gap = '5px';
 
-        const upgradeBtn = document.createElement('button');
-        upgradeBtn.className = 'inspector-btn';
-        if (hasUpgrade) {
-            const nextUpgrade = def.upgrades[tower.level];
-            upgradeBtn.textContent = `⚡ Upgrade (${nextUpgrade.cost}g)`;
-            // Read the current gold dynamically from the HUD element to decide if disabled
-            const currentGold = parseInt(this.goldEl.textContent);
-            if (currentGold < nextUpgrade.cost) {
-                upgradeBtn.disabled = true; // Disable if broke
+        const currentGold = parseInt(this.goldEl.textContent);
+
+        // 1. Damage / Power Upgrade Button
+        const dmgCost = Math.round(def.cost * Math.pow(1.15, tower.damageLevel));
+        const dmgBtn = document.createElement('button');
+        dmgBtn.className = 'inspector-btn';
+        dmgBtn.textContent = `⚔️ Pwr Up (${dmgCost}g)`;
+        if (currentGold < dmgCost) dmgBtn.disabled = true;
+        dmgBtn.addEventListener('click', () => this.scene.events.emit('upgrade-tower', tower, 'damage', dmgCost));
+        actionsEl.appendChild(dmgBtn);
+
+        // 2. Speed Upgrade Button (Only for towers that shoot)
+        if (tower.fireRate > 0) {
+            const spdCost = Math.round((def.cost * 1.5) * Math.pow(1.15, tower.speedLevel));
+            const spdBtn = document.createElement('button');
+            spdBtn.className = 'inspector-btn';
+            spdBtn.textContent = `⚡ Spd Up (${spdCost}g)`;
+            if (currentGold < spdCost) spdBtn.disabled = true;
+            // Cap at 15 shots/sec to prevent physics engine lag
+            if (tower.fireRate >= 15) {
+                spdBtn.textContent = '⚡ Spd MAX';
+                spdBtn.disabled = true;
             }
-        } else {
-            upgradeBtn.textContent = '⚡ Max Level';
-            upgradeBtn.disabled = true;
+            spdBtn.addEventListener('click', () => this.scene.events.emit('upgrade-tower', tower, 'speed', spdCost));
+            actionsEl.appendChild(spdBtn);
         }
 
+        // 3. Range Upgrade Button (Not for miner)
+        if (def.range > 0) {
+            const rngCost = Math.round((def.cost * 0.8) * Math.pow(1.15, tower.rangeLevel));
+            const rngBtn = document.createElement('button');
+            rngBtn.className = 'inspector-btn';
+            rngBtn.textContent = `🎯 Rng Up (${rngCost}g)`;
+            if (currentGold < rngCost) rngBtn.disabled = true;
+            rngBtn.addEventListener('click', () => this.scene.events.emit('upgrade-tower', tower, 'range', rngCost));
+            actionsEl.appendChild(rngBtn);
+        }
+
+        // 4. Sell Button
         const sellBtn = document.createElement('button');
         sellBtn.className = 'inspector-btn inspector-btn--sell';
+        sellBtn.style.marginTop = '10px';
         
-        // Calculate refund amount
-        // WHY? In TD games, selling upgraded towers should refund a portion of both the base
-        // cost and any upgrades purchased. We calculate 70% refund of the total cumulative gold spent.
-        const baseRefundRatio = 0.7;
-        let totalCost = def.cost;
-        for (let i = 0; i < tower.level; i++) {
-            totalCost += def.upgrades[i].cost;
-        }
-        const refundAmount = Math.round(totalCost * baseRefundRatio);
+        const totalCost = def.cost + tower.damageSpent + tower.speedSpent + tower.rangeSpent;
+        const refundAmount = Math.round(totalCost * 0.7);
         sellBtn.textContent = `💰 Sell (+${refundAmount}g)`;
-
-        // Wire click handlers to emit Phaser events back to the scene
-        // WHY events? Decouples the HTML UI from the Phaser scene core logic, making the code much easier to maintain.
-        upgradeBtn.addEventListener('click', () => {
-            this.scene.events.emit('upgrade-tower', tower);
-        });
-
-        sellBtn.addEventListener('click', () => {
-            this.scene.events.emit('sell-tower', tower);
-        });
-
-        actionsEl.appendChild(upgradeBtn);
+        sellBtn.addEventListener('click', () => this.scene.events.emit('sell-tower', tower));
         actionsEl.appendChild(sellBtn);
+
         this.inspectorEl.appendChild(actionsEl);
     }
 }

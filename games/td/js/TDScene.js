@@ -337,12 +337,7 @@ class TDScene extends Phaser.Scene {
 
             miners.forEach(miner => {
                 const def = GAME_CONFIG.towers.miner;
-                let reward = def.goldGeneration;
-
-                // Adjust reward based on upgrade level if the miner has been upgraded
-                for (let i = 0; i < miner.level; i++) {
-                    reward = def.upgrades[i].goldGeneration ?? reward;
-                }
+                let reward = miner.goldGeneration || def.goldGeneration;
 
                 // Add gold and update display
                 this.gold += reward;
@@ -375,22 +370,43 @@ class TDScene extends Phaser.Scene {
            WHY? When a player clicks the "Upgrade" button in the HUD inspector, it emits this event.
            We deduct the cost, increment the level, apply updated stats (damage, range, etc.),
            trigger a redraw of the tower's level dots, recalculate buffs, and update the HUD inspector display. */
-        this.events.on('upgrade-tower', (tower) => {
-            const def = GAME_CONFIG.towers[tower.type];
-            const upgradeDef = def.upgrades[tower.level];
-            
-            if (this.gold >= upgradeDef.cost) {
-                this.gold -= upgradeDef.cost;
+        this.events.on('upgrade-tower', (tower, upgradeType, cost) => {
+            if (this.gold >= cost) {
+                this.gold -= cost;
                 this.hud.setGold(this.gold);
 
-                // Apply upgrade level
-                tower.level++;
+                const def = GAME_CONFIG.towers[tower.type];
 
-                // Apply new stats (fallback to current stats if upgrade doesn't change them)
-                tower.damage = upgradeDef.damage ?? tower.damage;
-                tower.range = upgradeDef.range ?? tower.range;
-                tower.fireRate = upgradeDef.fireRate ?? tower.fireRate;
-                tower.splashRadius = upgradeDef.splashRadius ?? tower.splashRadius;
+                if (upgradeType === 'damage') {
+                    tower.damageLevel++;
+                    tower.damageSpent += cost;
+                    
+                    // Standard damage
+                    if (def.damage > 0) {
+                        tower.baseDamage = def.damage * Math.pow(1.10, tower.damageLevel);
+                        tower.damage = tower.baseDamage;
+                    }
+                    
+                    // Special stats
+                    if (def.goldGeneration) tower.goldGeneration = def.goldGeneration * Math.pow(1.10, tower.damageLevel);
+                    if (def.buffMultiplier) tower.buffMultiplier = 1.0 + ((def.buffMultiplier - 1.0) * Math.pow(1.10, tower.damageLevel));
+                    if (def.slowMultiplier) tower.slowMultiplier = def.slowMultiplier * Math.pow(0.95, tower.damageLevel); // becomes stronger/closer to 0
+                    if (def.poisonDamage) tower.poisonDamage = def.poisonDamage * Math.pow(1.10, tower.damageLevel);
+                    if (def.chainTargets) tower.chainTargets = def.chainTargets + Math.floor(tower.damageLevel / 5);
+
+                } else if (upgradeType === 'speed') {
+                    tower.speedLevel++;
+                    tower.speedSpent += cost;
+                    tower.baseFireRate = def.fireRate + (0.2 * tower.speedLevel);
+                    if (tower.baseFireRate > 15) tower.baseFireRate = 15;
+                    tower.fireRate = tower.baseFireRate;
+
+                } else if (upgradeType === 'range') {
+                    tower.rangeLevel++;
+                    tower.rangeSpent += cost;
+                    tower.baseRange = def.range + (0.2 * tower.rangeLevel);
+                    tower.range = tower.baseRange;
+                }
 
                 // Redraw graphics to show new gold stars/dots
                 this.towerManager.redrawTower(tower);

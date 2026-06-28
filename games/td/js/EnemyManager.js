@@ -86,6 +86,10 @@ class EnemyManager {
         // Scaling enemy HP exponentially ensures the game remains challenging.
         const hpMultiplier = Math.pow(1.055, waveNumber - 1);
         const scaledHealth = Math.round(def.health * hpMultiplier);
+        
+        // Scale gold rewards so players can afford infinite upgrades in the late game
+        const rewardMultiplier = Math.pow(1.03, waveNumber - 1);
+        const scaledReward = Math.round(def.reward * rewardMultiplier);
 
         /* Start at the spawn tile's pixel centre */
         const startTile = this.currentPath[0];
@@ -120,7 +124,7 @@ class EnemyManager {
             health: scaledHealth,
             maxHealth: scaledHealth,
             speed: def.speed,
-            reward: def.reward,
+            reward: scaledReward,
             x: startPos.x,
             y: startPos.y,
             pathIndex: 1, // Start heading toward the SECOND waypoint (index 1)
