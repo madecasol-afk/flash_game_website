@@ -90,10 +90,10 @@ class TDScene extends Phaser.Scene {
         /* --- Handle Canvas Clicks (Tower Placement) ---
            WHY pointerdown instead of click? Phaser's input system uses
            pointerdown for consistency across mouse and touch devices. */
-        this.input.on('pointerdown', async (pointer) => {
+        this.input.on('pointerdown', (pointer) => {
             if (this.gameOver) return;
 
-            const result = await this.towerManager.placeTower(
+            const result = this.towerManager.placeTower(
                 pointer.x, pointer.y, this.gold
             );
 
@@ -104,7 +104,7 @@ class TDScene extends Phaser.Scene {
 
                 /* Recalculate enemy path after tower placement.
                    WHY? The new tower might block the old route. */
-                await this.enemyManager.refreshPath();
+                this.enemyManager.refreshPath();
 
                 /* Deselect the tower button so the player must
                    explicitly choose again for the next placement. */

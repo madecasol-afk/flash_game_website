@@ -58,9 +58,9 @@ class TowerManager {
      * @param {number} pixelX  - Click X in canvas pixels
      * @param {number} pixelY  - Click Y in canvas pixels
      * @param {number} gold    - Player's current gold
-     * @returns {Promise<{success: boolean, cost: number}>}
+     * @returns {{success: boolean, cost: number}}
      */
-    async placeTower(pixelX, pixelY, gold) {
+    placeTower(pixelX, pixelY, gold) {
         /* Step 1: No tower type selected → do nothing */
         if (!this.selectedType) {
             return { success: false, cost: 0 };
@@ -83,7 +83,7 @@ class TowerManager {
         /* Step 5: Check that placing here won't block ALL enemy paths.
            WHY? If there's no route from spawn to exit, enemies would
            get stuck. Good tower defense games prevent this. */
-        const pathStillExists = await this.pathfinder.isPathPossible(col, row);
+        const pathStillExists = this.pathfinder.isPathPossible(col, row);
         if (!pathStillExists) {
             return { success: false, cost: 0 };
         }

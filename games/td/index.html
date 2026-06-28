@@ -21,8 +21,9 @@
     <!-- EasyStar.js: A lightweight A* pathfinding library.
          WHY A*? It finds the shortest path on a grid efficiently. When the
          player places a tower, we re-run A* so enemies dynamically reroute
-         around the new obstacle. -->
-    <script src="https://cdn.jsdelivr.net/npm/easystarjs@0.4.4/src/easystar.min.js"></script>
+         We wrote our own lightweight A* implementation (in Pathfinder.js)
+         so we don't need any external pathfinding library. This avoids
+         CDN compatibility issues and keeps the project dependency-free. -->
 
     <!-- Game-specific stylesheet -->
     <link rel="stylesheet" href="td.css">

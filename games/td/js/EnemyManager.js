@@ -53,12 +53,12 @@ class EnemyManager {
      * 
      * Called once at game start and every time a tower is placed/sold.
      *
-     * @returns {Promise<boolean>} true if a valid path was found
+     * @returns {boolean} true if a valid path was found
      */
-    async refreshPath() {
+    refreshPath() {
         const spawn = this.gridSystem.spawnTile;
         const exit  = this.gridSystem.exitTile;
-        this.currentPath = await this.pathfinder.findPath(
+        this.currentPath = this.pathfinder.findPath(
             spawn.col, spawn.row, exit.col, exit.row
         );
         return this.currentPath !== null;
