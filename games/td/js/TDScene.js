@@ -57,56 +57,116 @@ class TDScene extends Phaser.Scene {
            we achieve clean transparent sprite sheets natively in browser. */
         const processTexture = (key, rawKey) => {
             const rawImg = this.textures.get(rawKey).getSourceImage();
-            const canvasTexture = this.textures.createCanvas(key, 1024, 1024);
+            const width = 1024;
+            const height = 1024;
+            const canvasTexture = this.textures.createCanvas(key, width, height);
             canvasTexture.draw(0, 0, rawImg);
             
             const context = canvasTexture.context;
-            const imgData = context.getImageData(0, 0, 1024, 1024);
+            const imgData = context.getImageData(0, 0, width, height);
             const data = imgData.data;
 
-            // Track colored pixels distribution to auto-detect layout (2x2 vs 1x4)
+            // WHY FLOOD FILL? 
+            // A naive chroma key (removing all white/grey pixels blindly) creates "broken pixels" (holes) 
+            // inside the monster if it has white teeth, grey armor, or shiny highlights.
+            // A flood fill starting from the edges guarantees we ONLY remove the background checkerboard
+            // and never touch the internal pixels of the monster!
+            const visited = new Uint8Array(width * height);
+            const queue = new Int32Array(width * height);
+            let head = 0;
+            let tail = 0;
+
+            const isBg = (idx) => {
+                const r = data[idx * 4];
+                const g = data[idx * 4 + 1];
+                const b = data[idx * 4 + 2];
+                // Checkerboards are bright and colorless (grey/white).
+                return (r > 190 && g > 190 && b > 190) &&
+                       (Math.abs(r - g) < 10 && Math.abs(r - b) < 10 && Math.abs(g - b) < 10);
+            };
+
+            const pushEdge = (idx) => {
+                if (!visited[idx]) {
+                    visited[idx] = 1;
+                    if (isBg(idx)) {
+                        data[idx * 4 + 3] = 0; // Make transparent
+                        queue[tail++] = idx;
+                    }
+                }
+            };
+
+            // 1. Seed the edges of the image for the flood fill
+            for (let x = 0; x < width; x++) {
+                pushEdge(x);
+                pushEdge((height - 1) * width + x);
+            }
+            for (let y = 0; y < height; y++) {
+                pushEdge(y * width);
+                pushEdge(y * width + (width - 1));
+            }
+
+            // 2. BFS Flood Fill the background
+            while (head < tail) {
+                const idx = queue[head++];
+                const x = idx % width;
+                const y = Math.floor(idx / width);
+                
+                // Left
+                if (x > 0) {
+                    const n = idx - 1;
+                    if (!visited[n]) {
+                        visited[n] = 1;
+                        if (isBg(n)) { data[n * 4 + 3] = 0; queue[tail++] = n; }
+                    }
+                }
+                // Right
+                if (x < width - 1) {
+                    const n = idx + 1;
+                    if (!visited[n]) {
+                        visited[n] = 1;
+                        if (isBg(n)) { data[n * 4 + 3] = 0; queue[tail++] = n; }
+                    }
+                }
+                // Up
+                if (y > 0) {
+                    const n = idx - width;
+                    if (!visited[n]) {
+                        visited[n] = 1;
+                        if (isBg(n)) { data[n * 4 + 3] = 0; queue[tail++] = n; }
+                    }
+                }
+                // Down
+                if (y < height - 1) {
+                    const n = idx + width;
+                    if (!visited[n]) {
+                        visited[n] = 1;
+                        if (isBg(n)) { data[n * 4 + 3] = 0; queue[tail++] = n; }
+                    }
+                }
+            }
+
+            // 3. Auto-Detect Layout (2x2 Grid vs 1x4 Strip)
+            // After the flood fill, any opaque pixel belongs to a monster!
             let hasTopPixels = false;
             let hasBottomPixels = false;
-            let minY = 1024;
+            let minY = height;
             let maxY = 0;
 
-            // Chromakey loop: Set alpha to 0 for checkerboard grid background pixels.
-            // WHY? The background is a grid of alternating light-grey and white squares.
-            // Since grey and white pixels have Red, Green, and Blue values that are extremely close to each other,
-            // we can filter them out by checking if the values are bright (> 190) and similar (difference < 10).
-            for (let i = 0; i < data.length; i += 4) {
-                const r = data[i];
-                const g = data[i+1];
-                const b = data[i+2];
-
-                // Check if R, G, B are similar (indicates a grey or white color)
-                const isGreyOrWhite = (r > 190 && g > 190 && b > 190) &&
-                                      (Math.abs(r - g) < 10 && Math.abs(r - b) < 10 && Math.abs(g - b) < 10);
-
-                if (isGreyOrWhite) {
-                    data[i+3] = 0; // Set alpha to 0 (make pixel fully transparent)
-                } else {
-                    // Pixel is part of the colored monster!
-                    // Calculate pixel coordinates
-                    const pixelIndex = i / 4;
-                    const pxY = Math.floor(pixelIndex / 1024);
-
+            for (let i = 0; i < width * height; i++) {
+                if (data[i * 4 + 3] !== 0) {
+                    const pxY = Math.floor(i / width);
                     if (pxY < minY) minY = pxY;
                     if (pxY > maxY) maxY = pxY;
 
-                    // Check if we have colored pixels near the top or bottom edges (determines grid vs strip)
                     if (pxY < 250) hasTopPixels = true;
                     if (pxY > 770) hasBottomPixels = true;
                 }
             }
+
             context.putImageData(imgData, 0, 0);
             canvasTexture.refresh();
 
-            // Detect Layout:
-            // If we have colored pixels at both the top and bottom of the sheet, it's a 2x2 grid.
-            // Otherwise, it's a 1x4 horizontal strip centered in the middle.
-            // WHY? Different AI models lay out animations differently. Slicing dynamically ensures
-            // all of our enemy graphics render without clipping.
+            // 4. Adaptive Slicing
             const is2x2Grid = hasTopPixels && hasBottomPixels;
 
             if (is2x2Grid) {
