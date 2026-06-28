@@ -64,28 +64,34 @@ class TDScene extends Phaser.Scene {
             const imgData = context.getImageData(0, 0, 1024, 1024);
             const data = imgData.data;
 
-            // Loop through all pixel data (each pixel takes 4 bytes: Red, Green, Blue, Alpha)
+            // Chromakey loop: Set alpha to 0 for checkerboard grid background pixels.
+            // WHY? The background is a grid of alternating light-grey and white squares.
+            // Since grey and white pixels have Red, Green, and Blue values that are extremely close to each other,
+            // we can filter them out by checking if the values are bright (> 190) and similar (difference < 10).
             for (let i = 0; i < data.length; i += 4) {
                 const r = data[i];
                 const g = data[i+1];
                 const b = data[i+2];
 
-                // If pixel is close to off-white/light grey (R,G,B all > 220)
-                if (r > 220 && g > 220 && b > 220) {
-                    data[i+3] = 0; // Set alpha to 0 (fully transparent)
+                // Check if R, G, B are similar (indicates a grey or white color)
+                const isGreyOrWhite = (r > 190 && g > 190 && b > 190) &&
+                                      (Math.abs(r - g) < 10 && Math.abs(r - b) < 10 && Math.abs(g - b) < 10);
+
+                if (isGreyOrWhite) {
+                    data[i+3] = 0; // Set alpha to 0 (make pixel fully transparent)
                 }
             }
             context.putImageData(imgData, 0, 0);
             canvasTexture.refresh();
 
-            // Slice into a 2x2 grid of 512x512 frames
-            // SYNTAX BREAKDOWN:
-            // - `canvasTexture.add('frame_name', sourceIndex, x, y, width, height)`
-            // - Defines custom frames inside our newly processed texture sheet.
-            canvasTexture.add('frame_0', 0, 0, 0, 512, 512);
-            canvasTexture.add('frame_1', 0, 512, 0, 512, 512);
-            canvasTexture.add('frame_2', 0, 0, 512, 512, 512);
-            canvasTexture.add('frame_3', 0, 512, 512, 512, 512);
+            // Slice into a 1x4 horizontal row of 256x256 frames
+            // WHY? The sprite sheet we generated contains 4 walk animation frames lined up horizontally
+            // in the middle of a 1024x1024 image.
+            // Each frame starts at y=384 (centered vertically) and is 256x256 pixels.
+            canvasTexture.add('frame_0', 0, 0, 384, 256, 256);
+            canvasTexture.add('frame_1', 0, 256, 384, 256, 256);
+            canvasTexture.add('frame_2', 0, 512, 384, 256, 256);
+            canvasTexture.add('frame_3', 0, 768, 384, 256, 256);
         };
 
         processTexture('basic_clean', 'scout_raw');
