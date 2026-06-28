@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- SEO: Descriptive title so search engines know what this site is about -->
+    <title>Arcade Forge — Free HTML5 Browser Games</title>
+    <meta name="description" content="Play free tower defense, puzzle, and strategy games right in your browser. No downloads, no fees — just fun.">
+
+    <!-- Typography: Inter from Google Fonts for a clean, modern feel -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@700;900&display=swap" rel="stylesheet">
+
+    <!-- Global stylesheet -->
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+
+    <!-- ========== HEADER ========== -->
+    <header class="site-header">
+        <div class="header-inner">
+            <h1 class="logo">🕹️ Arcade <span class="logo-accent">Forge</span></h1>
+            <p class="tagline">Free HTML5 games — play instantly, no download required.</p>
+        </div>
+    </header>
+
+    <!-- ========== MAIN: Game Cards Grid ========== -->
+    <main class="game-grid" id="game-grid">
+
+        <!-- Game Card: Tower Defense -->
+        <a href="games/td/index.html" class="game-card" id="card-tower-defense">
+            <div class="card-icon">🏰</div>
+            <h2 class="card-title">Tower Defense</h2>
+            <p class="card-desc">Place towers, block enemy paths, and survive the onslaught.</p>
+            <span class="card-badge">Play Now →</span>
+        </a>
+
+        <!-- Game Card: Placeholder for future Game 2 -->
+        <div class="game-card game-card--locked" id="card-rock-stacking">
+            <div class="card-icon">🪨</div>
+            <h2 class="card-title">Rock Stacking</h2>
+            <p class="card-desc">Physics-based stacking puzzle. Coming soon!</p>
+            <span class="card-badge card-badge--locked">Coming Soon</span>
+        </div>
+
+        <!-- Game Card: Placeholder for future Game 3 -->
+        <div class="game-card game-card--locked" id="card-chess-trainer">
+            <div class="card-icon">♟️</div>
+            <h2 class="card-title">Chess Trainer</h2>
+            <p class="card-desc">Master popular openings with guided drills.</p>
+            <span class="card-badge card-badge--locked">Coming Soon</span>
+        </div>
+
+    </main>
+
+    <!-- ========== FOOTER ========== -->
+    <footer class="site-footer">
+        <p>&copy; 2026 Arcade Forge. Built with ❤️ and AI.</p>
+    </footer>
+
+</body>
+</html>

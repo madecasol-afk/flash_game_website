@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- SEO: Page-specific title for the tower defense game -->
+    <title>Tower Defense — Arcade Forge</title>
+    <meta name="description" content="A free browser-based tower defense game. Place towers, block enemy paths, and defend your base!">
+
+    <!-- Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@700;900&display=swap" rel="stylesheet">
+
+    <!-- Phaser 3: The game engine that handles rendering, input, and scenes.
+         WHY a CDN? Zero install step — just a single script tag. We can switch
+         to a local copy or npm later if we need offline dev. -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+
+    <!-- EasyStar.js: A lightweight A* pathfinding library.
+         WHY A*? It finds the shortest path on a grid efficiently. When the
+         player places a tower, we re-run A* so enemies dynamically reroute
+         around the new obstacle. -->
+    <script src="https://cdn.jsdelivr.net/npm/easystarjs@0.4.4/src/easystar.min.js"></script>
+
+    <!-- Game-specific stylesheet -->
+    <link rel="stylesheet" href="td.css">
+</head>
+<body>
+
+    <!-- ========== TOP BAR ========== -->
+    <header class="td-header">
+        <a href="../../index.html" class="back-link" id="back-to-home">← Back to Arcade</a>
+        <h1 class="td-title">🏰 Tower Defense</h1>
+    </header>
+
+    <!-- ========== GAME CONTAINER ========== 
+         WHY a wrapper div? Phaser will inject its own <canvas> element 
+         inside this container. We style the container to centre the canvas
+         and add a subtle border/glow effect around it. -->
+    <div id="game-container" class="game-container"></div>
+
+    <!-- ========== HUD PANEL (below the game canvas) ========== 
+         This panel shows gold, lives, and wave info. We build it in HTML
+         rather than drawing it on the canvas so it's easier to style,
+         animate, and keep accessible for screen readers. -->
+    <div class="hud-panel" id="hud-panel">
+        <div class="hud-item" id="hud-gold">
+            <span class="hud-label">💰 Gold</span>
+            <span class="hud-value" id="gold-value">100</span>
+        </div>
+        <div class="hud-item" id="hud-lives">
+            <span class="hud-label">❤️ Lives</span>
+            <span class="hud-value" id="lives-value">20</span>
+        </div>
+        <div class="hud-item" id="hud-wave">
+            <span class="hud-label">🌊 Wave</span>
+            <span class="hud-value" id="wave-value">0 / 10</span>
+        </div>
+        <button class="hud-btn" id="btn-start-wave">▶ Send Wave</button>
+    </div>
+
+    <!-- ========== TOWER SHOP (sidebar) ========== 
+         Players click a tower icon here, then click on the grid to place it.
+         WHY separate from the canvas? Same reason as the HUD — HTML buttons
+         are easier to style and more accessible than canvas-drawn UI. -->
+    <div class="tower-shop" id="tower-shop">
+        <h2 class="shop-title">Towers</h2>
+
+        <button class="tower-btn" id="tower-basic" data-tower="basic">
+            <span class="tower-icon">🔫</span>
+            <span class="tower-name">Blaster</span>
+            <span class="tower-cost">25g</span>
+        </button>
+
+        <button class="tower-btn" id="tower-splash" data-tower="splash">
+            <span class="tower-icon">💥</span>
+            <span class="tower-name">Cannon</span>
+            <span class="tower-cost">50g</span>
+        </button>
+
+        <button class="tower-btn" id="tower-sniper" data-tower="sniper">
+            <span class="tower-icon">🎯</span>
+            <span class="tower-name">Sniper</span>
+            <span class="tower-cost">75g</span>
+        </button>
+    </div>
+
+    <!-- ========== GAME SCRIPTS ========== 
+         We load these as ES6 modules so we can use import/export later.
+         For now they're simple scripts loaded in dependency order. -->
+    <script src="js/config.js"></script>
+    <script src="js/GridSystem.js"></script>
+    <script src="js/Pathfinder.js"></script>
+    <script src="js/TowerManager.js"></script>
+    <script src="js/EnemyManager.js"></script>
+    <script src="js/WaveManager.js"></script>
+    <script src="js/HUD.js"></script>
+    <script src="js/TDScene.js"></script>
+    <script src="js/main.js"></script>
+
+</body>
+</html>
