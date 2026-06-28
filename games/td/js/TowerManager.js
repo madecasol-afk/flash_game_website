@@ -238,4 +238,84 @@ class TowerManager {
             target.takeDamage(tower.damage);
         }
     }
+
+    /**
+     * sellTower — Attempt to sell an existing tower at the clicked pixel position.
+     * 
+     * Purpose:
+     * This method converts the screen click to grid coordinates, searches our
+     * active towers list for a match, calculates the refund amount (70% of the
+     * original cost plus upgrades), removes the tower graphics from Phaser,
+     * unblocks the grid tile, and deletes the tower from our array.
+     *
+     * @param {number} pixelX - Click X coordinate in pixels
+     * @param {number} pixelY - Click Y coordinate in pixels
+     * @returns {{success: boolean, refund: number}} Results of the sell action
+     */
+    sellTower(pixelX, pixelY) {
+        // Convert the raw pixel coordinates (where the player clicked) into grid indices (column and row).
+        // WHY? The grid handles coordinate snapping. A tile is 40x40 pixels, so clicking anywhere inside
+        // that 40x40 boundary will resolve to the exact column and row of that tile.
+        const { col, row } = this.gridSystem.pixelToTile(pixelX, pixelY);
+
+        // Search the `this.towers` array to find the index of the tower at this location.
+        // SYNTAX BREAKDOWN:
+        // - Array.prototype.findIndex() loops through every tower in the array.
+        // - It evaluates the arrow function: `(t) => t.col === col && t.row === row`.
+        // - If it finds a match, it returns the 0-indexed position (e.g. 0, 1, 2...).
+        // - If no match is found, it returns -1.
+        const towerIndex = this.towers.findIndex(t => t.col === col && t.row === row);
+
+        // If no tower exists at the clicked tile, findIndex returns -1.
+        // WHY return early? We cannot sell a tower that isn't there, so we tell the caller it failed.
+        if (towerIndex === -1) {
+            return { success: false, refund: 0 };
+        }
+
+        // Get the actual tower object from our list.
+        const tower = this.towers[towerIndex];
+
+        // Retrieve the configuration data for this specific tower type (e.g. basic blaster cost).
+        const towerDef = GAME_CONFIG.towers[tower.type];
+
+        // Calculate refund amount.
+        // WHY 70%? It's a standard tower-defense game balancing rule. If players got 100% back,
+        // they could dynamically move their entire defense instantly with zero strategic penalty.
+        // A 30% loss forces players to plan their layout more carefully.
+        const baseRefundRatio = 0.7;
+        let totalCost = towerDef.cost;
+
+        // If the tower has been upgraded, add the upgrade costs to the total calculation.
+        // SYNTAX BREAKDOWN:
+        // - `tower.level` tracks how many upgrades have been applied (0 = base, 1 = first upgrade, etc.).
+        // - We loop from `i = 0` up to `tower.level - 1` to sum the cost of each upgrade applied.
+        for (let i = 0; i < tower.level; i++) {
+            totalCost += towerDef.upgrades[i].cost;
+        }
+
+        // Round to avoid fractional gold values (e.g., 17.5 gold).
+        const refundAmount = Math.round(totalCost * baseRefundRatio);
+
+        // Clean up the visuals of the tower.
+        // WHY? Phaser keeps sprites/drawings in its rendering engine. If we just delete the tower
+        // from our array, the colored square would remain drawn on the screen forever.
+        // Calling `.destroy()` removes the graphics object from Phaser's rendering queue completely.
+        tower.graphics.destroy();
+
+        // Mark this tile on the map as empty (buildable grass) again.
+        // WHY? This allows future towers to be placed here, and lets enemies walk through
+        // if this was part of the original path (the A* algorithm will utilize it again).
+        this.gridSystem.unblockTile(col, row);
+
+        // Remove the tower from our tracker array.
+        // SYNTAX BREAKDOWN:
+        // - Array.prototype.splice(startIndex, deleteCount) modifies the array in place.
+        // - `towerIndex` is where the target tower resides.
+        // - `1` means remove exactly 1 element starting from that index.
+        this.towers.splice(towerIndex, 1);
+
+        // Return success and the calculated refund amount back to the main game scene.
+        return { success: true, refund: refundAmount };
+    }
 }
+

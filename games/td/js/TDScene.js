@@ -87,12 +87,36 @@ class TDScene extends Phaser.Scene {
             }
         });
 
-        /* --- Handle Canvas Clicks (Tower Placement) ---
+        /* --- Handle Canvas Clicks (Tower Placement & Selling) ---
            WHY pointerdown instead of click? Phaser's input system uses
            pointerdown for consistency across mouse and touch devices. */
         this.input.on('pointerdown', (pointer) => {
+            // If the game has ended, stop processing inputs.
             if (this.gameOver) return;
 
+            // If the player has selected "Sell Mode" in the tower shop:
+            // WHY? We check this mode before trying to place a tower because the player clicked with the
+            // intent of removing a tower and recovering gold, not building a new one.
+            if (this.towerManager.selectedType === 'sell') {
+                const sellResult = this.towerManager.sellTower(pointer.x, pointer.y);
+
+                // If a tower was successfully found and sold at the click position:
+                if (sellResult.success) {
+                    // Add the refund gold amount to the player's bank
+                    this.gold += sellResult.refund;
+                    this.hud.setGold(this.gold);
+
+                    // Recalculate the path for any active or future enemies.
+                    // WHY? Removing a tower might open a shorter path that was previously blocked.
+                    this.enemyManager.refreshPath();
+
+                    // Deselect "Sell Mode" in the UI so the player doesn't accidentally sell other towers.
+                    this.hud.deselectAllTowers();
+                }
+                return; // Stop execution here so we don't try to place a tower on the same click.
+            }
+
+            // Normal flow: attempt to place a tower.
             const result = this.towerManager.placeTower(
                 pointer.x, pointer.y, this.gold
             );
