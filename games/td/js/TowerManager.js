@@ -132,6 +132,8 @@ class TowerManager {
         // next to a Buffer, it should receive the buff immediately.
         this.recalculateBuffs();
 
+        if (this.scene.soundSystem) this.scene.soundSystem.playBuild();
+
         return { success: true, cost: towerDef.cost };
     }
 
@@ -274,10 +276,13 @@ class TowerManager {
     _playAttackAnimation(tower, target, towerPos, onHitCallback) {
         const scene = this.scene;
         const type = tower.type;
+        const snd = scene.soundSystem;
         
         if (type === 'basic' || type === 'poisoner') {
-            // Projectile
             const isAcid = type === 'poisoner';
+            if (snd) isAcid ? snd.playAcid() : snd.playBlaster();
+            
+            // Projectile
             const proj = scene.add.graphics();
             proj.fillStyle(isAcid ? 0x2ecc71 : 0x4ecdc4, 1);
             proj.fillCircle(0, 0, isAcid ? 4 : 3);
@@ -309,6 +314,7 @@ class TowerManager {
             });
         }
         else if (type === 'splash') {
+            if (snd) snd.playCannon();
             // Arcing bomb
             const proj = scene.add.graphics();
             proj.fillStyle(0x444444, 1);
@@ -340,6 +346,7 @@ class TowerManager {
             });
         }
         else if (type === 'sniper') {
+            if (snd) snd.playSniper();
             // Hitscan instantaneous thin beam
             const line = scene.add.graphics();
             line.lineStyle(1, 0xffd93d, 1);
@@ -362,6 +369,7 @@ class TowerManager {
             onHitCallback(); // Instant hit
         }
         else if (type === 'slower') {
+            if (snd) snd.playFrost();
             // Frost beam (fading line)
             const line = scene.add.graphics();
             line.lineStyle(3, 0x3498db, 0.6);
@@ -387,6 +395,7 @@ class TowerManager {
             onHitCallback(); // Instant hit
         }
         else if (type === 'laser') {
+            if (snd) snd.playLaser();
             // Solid continuous laser (since fire rate is high, it redraws often)
             const line = scene.add.graphics();
             line.lineStyle(2, 0x9b59b6, 0.9);
@@ -404,6 +413,7 @@ class TowerManager {
             onHitCallback(); // Instant hit
         }
         else if (type === 'doomray') {
+            if (snd) snd.playDoomRay();
             // Doomray screen shake & massive beam
             scene.cameras.main.shake(300, 0.015);
             
@@ -504,6 +514,8 @@ class TowerManager {
         // - `towerIndex` is where the target tower resides.
         // - `1` means remove exactly 1 element starting from that index.
         this.towers.splice(towerIndex, 1);
+
+        if (this.scene.soundSystem) this.scene.soundSystem.playSell();
 
         // Return success and the calculated refund amount back to the main game scene.
         return { success: true, refund: refundAmount };
@@ -651,6 +663,7 @@ class TowerManager {
      * @private
      */
     _fireChainLightning(tower, target, towerPos, enemies) {
+        if (this.scene.soundSystem) this.scene.soundSystem.playTesla();
         const def = GAME_CONFIG.towers.tesla;
         let chainTargets = def.chainTargets;
 

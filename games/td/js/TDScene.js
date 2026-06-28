@@ -58,6 +58,9 @@ class TDScene extends Phaser.Scene {
     create() {
         const cfg = GAME_CONFIG;
 
+        // Initialize Procedural Audio Synthesizer
+        this.soundSystem = new SoundSystem();
+
         /* --- Player State --- */
         this.gold  = cfg.player.startGold;
         this.lives = cfg.player.startLives;
