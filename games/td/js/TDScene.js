@@ -66,6 +66,10 @@ class TDScene extends Phaser.Scene {
         this.lives = cfg.player.startLives;
         this.gameOver = false;
 
+        /* --- Game Speed State --- */
+        this.gameSpeed = 1;
+        this.gameTime = 0;
+
         /* --- Process Textures (Chroma Key Background Removal) ---
            WHY? The JPEGs have an off-white background (R=240, G=240, B=240). By drawing them
            onto an offscreen canvas texture, scanning pixels, and setting alpha to 0 for light pixels,
@@ -652,6 +656,30 @@ class TDScene extends Phaser.Scene {
             }
         });
 
+        /* --- Speed Controls --- */
+        const resetSpeedButtons = () => {
+            const btns = ['btn-speed-1x', 'btn-speed-2x', 'btn-speed-3x', 'btn-speed-10x'];
+            btns.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.backgroundColor = '#34495e';
+            });
+        };
+        const setSpeed = (speed, btnId) => {
+            this.gameSpeed = speed;
+            this.time.timeScale = speed;
+            resetSpeedButtons();
+            const btn = document.getElementById(btnId);
+            if (btn) btn.style.backgroundColor = '#27ae60';
+        };
+        const b1 = document.getElementById('btn-speed-1x');
+        if (b1) b1.addEventListener('click', () => setSpeed(1, 'btn-speed-1x'));
+        const b2 = document.getElementById('btn-speed-2x');
+        if (b2) b2.addEventListener('click', () => setSpeed(2, 'btn-speed-2x'));
+        const b3 = document.getElementById('btn-speed-3x');
+        if (b3) b3.addEventListener('click', () => setSpeed(3, 'btn-speed-3x'));
+        const b10 = document.getElementById('btn-speed-10x');
+        if (b10) b10.addEventListener('click', () => setSpeed(10, 'btn-speed-10x'));
+
         console.log('🏰 Tower Defense — Game loop started');
     }
 
@@ -664,10 +692,13 @@ class TDScene extends Phaser.Scene {
     update(time, delta) {
         if (this.gameOver) return;
 
+        const scaledDelta = delta * this.gameSpeed;
+        this.gameTime += scaledDelta;
+
         /* Convert delta from milliseconds to seconds for physics math.
            WHY seconds? It's more intuitive: "speed = 2 tiles per SECOND"
            reads better than "speed = 0.033 tiles per MILLISECOND". */
-        const deltaSec = delta / 1000;
+        const deltaSec = scaledDelta / 1000;
 
         /* --- Update Enemies (move along path, check health) --- */
         const enemyResult = this.enemyManager.update(deltaSec);
@@ -693,7 +724,7 @@ class TDScene extends Phaser.Scene {
 
         /* --- Update Towers (fire at enemies in range) --- */
         const activeEnemies = this.enemyManager.getActiveEnemies();
-        this.towerManager.update(time, activeEnemies);
+        this.towerManager.update(this.gameTime, activeEnemies);
 
         /* --- Check for Victory --- */
         if (this.waveManager.isAllWavesDone()) {

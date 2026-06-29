@@ -81,10 +81,10 @@ class EnemyManager {
             return;
         }
 
-        // Compounding health scaling: +5.5% health per wave
+        // Compounding health scaling: +12% health per wave
         // WHY? As waves progress, the player builds more towers and purchases upgrades.
         // Scaling enemy HP exponentially ensures the game remains challenging.
-        const hpMultiplier = Math.pow(1.055, waveNumber - 1);
+        const hpMultiplier = Math.pow(1.12, waveNumber - 1);
         const scaledHealth = Math.round(def.health * hpMultiplier);
         
         // Scale gold rewards so players can afford infinite upgrades in the late game

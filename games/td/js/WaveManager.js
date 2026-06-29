@@ -84,16 +84,23 @@ class WaveManager {
             this.spawnTimers.push(timer);
         }
 
-        /* Schedule the "wave complete" check after all spawns + a buffer.
-           WHY a buffer? The last enemy needs time to either die or reach
-           the exit. We check periodically until no active enemies remain. */
-        const checkTimer = scene.time.addEvent({
-            delay: cumulativeDelay + 2000,
-            callback: () => this._checkWaveComplete(scene),
+        /* Once the final enemy spawns, start a fast polling timer to check when the wave ends.
+           WHY a delayed timer? We must wait until ALL enemies have spawned before checking
+           if activeEnemies is 0, otherwise killing the first enemy might falsely end the wave! */
+        const waitTimer = scene.time.addEvent({
+            delay: cumulativeDelay,
+            callback: () => {
+                const checkTimer = scene.time.addEvent({
+                    delay: 250, // Poll 4 times per game second
+                    callback: () => this._checkWaveComplete(scene),
+                    callbackScope: this,
+                    loop: true,
+                });
+                this.spawnTimers.push(checkTimer);
+            },
             callbackScope: this,
-            loop: true,
         });
-        this.spawnTimers.push(checkTimer);
+        this.spawnTimers.push(waitTimer);
 
         this.currentWaveIndex++;
 

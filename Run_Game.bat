@@ -1,0 +1,6 @@
+@echo off
+echo Starting local web server for Tower Defense Game...
+echo The server is running. Do not close this window while playing!
+echo Opening browser...
+start http://localhost:8000/games/td/
+python -m http.server 8000
