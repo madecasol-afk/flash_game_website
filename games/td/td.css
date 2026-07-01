@@ -367,9 +367,21 @@ body {
     .tower-shop {
         position: static;
         transform: none;
+        display: flex;
         flex-direction: row;
         flex-wrap: wrap;
         justify-content: center;
+        width: 95vw;
         margin-bottom: var(--space-md);
+    }
+    .hud-panel {
+        flex-wrap: wrap;
+        justify-content: center;
+        width: 95vw;
+        gap: var(--space-sm);
+    }
+    .speed-controls {
+        flex-wrap: wrap;
+        justify-content: center;
     }
 }
