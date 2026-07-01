@@ -45,3 +45,5 @@ desktop.ini
 
 # Project Specific Ignored Folders
 test_result/
+
+*.md
