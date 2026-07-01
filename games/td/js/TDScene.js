@@ -392,7 +392,7 @@ class TDScene extends Phaser.Scene {
                     }
                     
                     // Special stats
-                    if (def.goldGeneration) tower.goldGeneration = def.goldGeneration * Math.pow(1.10, tower.damageLevel);
+                    if (def.goldGeneration) tower.goldGeneration = Math.round(def.goldGeneration * Math.pow(1.30, tower.damageLevel));
                     if (def.buffMultiplier) tower.buffMultiplier = 1.0 + ((def.buffMultiplier - 1.0) * Math.pow(1.10, tower.damageLevel));
                     if (def.slowMultiplier) tower.slowMultiplier = def.slowMultiplier * Math.pow(0.95, tower.damageLevel); // becomes stronger/closer to 0
                     if (def.poisonDamage) tower.poisonDamage = def.poisonDamage * Math.pow(1.10, tower.damageLevel);
@@ -469,7 +469,7 @@ class TDScene extends Phaser.Scene {
                             tower.baseDamage = def.damage * Math.pow(1.10, tower.damageLevel);
                             tower.damage = tower.baseDamage;
                         }
-                        if (def.goldGeneration) tower.goldGeneration = def.goldGeneration * Math.pow(1.10, tower.damageLevel);
+                        if (def.goldGeneration) tower.goldGeneration = Math.round(def.goldGeneration * Math.pow(1.30, tower.damageLevel));
                         if (def.buffMultiplier) tower.buffMultiplier = 1.0 + ((def.buffMultiplier - 1.0) * Math.pow(1.10, tower.damageLevel));
                         if (def.slowMultiplier) tower.slowMultiplier = def.slowMultiplier * Math.pow(0.95, tower.damageLevel);
                         if (def.poisonDamage) tower.poisonDamage = def.poisonDamage * Math.pow(1.10, tower.damageLevel);

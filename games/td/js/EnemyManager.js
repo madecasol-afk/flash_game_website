@@ -246,31 +246,34 @@ class EnemyManager {
                 continue;
             }
 
-            const targetWaypoint = enemy.path[enemy.pathIndex];
-            const targetPos = this.gridSystem.tileToPixel(targetWaypoint.x, targetWaypoint.y);
-
-            /* Calculate direction vector from enemy to target waypoint */
-            const dx = targetPos.x - enemy.x;
-            const dy = targetPos.y - enemy.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-
             /* How far can the enemy move this frame? 
                WHY multiply by slowMultiplier? If the enemy is frozen/slowed, their movement speed reduces accordingly. */
             const currentSpeed = enemy.speed * enemy.slowMultiplier;
-            const moveDistance = currentSpeed * tileSize * delta;
+            let moveDistance = currentSpeed * tileSize * delta;
+            let dx = 0;
+            let dy = 0;
 
-            if (dist <= moveDistance) {
-                /* Close enough — snap to waypoint and advance to the next one */
-                enemy.x = targetPos.x;
-                enemy.y = targetPos.y;
-                enemy.pathIndex++;
-            } else {
-                /* Move toward the waypoint by moveDistance pixels.
-                   WHY normalise? (dx/dist, dy/dist) gives us a unit direction
-                   vector. Multiplying by moveDistance ensures consistent speed
-                   regardless of the distance to the waypoint. */
-                enemy.x += (dx / dist) * moveDistance;
-                enemy.y += (dy / dist) * moveDistance;
+            /* Consume moveDistance in a loop to allow passing multiple waypoints in a single frame.
+               This prevents enemies from stacking at corners when the game is sped up (e.g. 10x speed) */
+            while (moveDistance > 0 && enemy.pathIndex < enemy.path.length) {
+                const targetWaypoint = enemy.path[enemy.pathIndex];
+                const targetPos = this.gridSystem.tileToPixel(targetWaypoint.x, targetWaypoint.y);
+                dx = targetPos.x - enemy.x;
+                dy = targetPos.y - enemy.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist <= moveDistance) {
+                    /* Close enough — snap to waypoint, consume distance, and advance */
+                    enemy.x = targetPos.x;
+                    enemy.y = targetPos.y;
+                    moveDistance -= dist;
+                    enemy.pathIndex++;
+                } else {
+                    /* Move toward the waypoint by the remaining moveDistance pixels. */
+                    enemy.x += (dx / dist) * moveDistance;
+                    enemy.y += (dy / dist) * moveDistance;
+                    moveDistance = 0; // Finished moving this frame
+                }
             }
 
             /* Update the visual position and rotation of the enemy sprite

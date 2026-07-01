@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beef Jerky Runner</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <div id="ui-layer">
+            <h1 id="title">BEEF JERKY</h1>
+            <p id="instructions">Press SPACE or UP ARROW to jump.</p>
+            <p id="scoreDisplay">Score: 0</p>
+            <div id="game-over" class="hidden">
+                <h2>Game Over!</h2>
+                <p>Your Score: <span id="final-score">0</span></p>
+                <button id="restart-btn">Try Again</button>
+            </div>
+        </div>
+    </div>
+    <script src="main.js"></script>
+</body>
+</html>

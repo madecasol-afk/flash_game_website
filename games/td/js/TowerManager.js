@@ -209,8 +209,8 @@ class TowerManager {
                 if (distSq <= rangePixels * rangePixels) {
                     if (tower.type === 'doomray') {
                         // Strongest targeting: Pick the enemy with the most maximum health
-                        if (enemy.maxHp > bestValue) {
-                            bestValue = enemy.maxHp;
+                        if (enemy.maxHealth > bestValue) {
+                            bestValue = enemy.maxHealth;
                             targetEnemy = enemy;
                         }
                     } else {
